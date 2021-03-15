@@ -76,12 +76,15 @@ dataREFROC$PT <- dataREFROC$populationType
 
 #-------------------------------------------------------------------------------------------------------------------------
 # Reloading this will also reset the global sqafList variable, which we want...
-source(paste0(rootScriptDirectory,"StatisticalQualityAssuranceFrameworkHelper.R"))
+source(paste0(rootScriptDirectory,"StatisticalQualityAssurance/StatisticalQualityAssuranceFrameworkHelper.R"))
 
 # Load the QA checks from the excel summary file
 sqafChecks <- read_excel(paste0(sqafDirectoryName, "SQAF_ValidationChecks.xlsx"), sheet=1, range=cell_cols("A:L"), n_max=10000)
 
-View(sqafChecks)
+# ensure the ID is a character
+sqafChecks$ID <- as.character(sqafChecks$ID)
+
+#View(sqafChecks)
 #View(dataDemo)
 
 # Filter the demoData to the latest year...
@@ -167,18 +170,37 @@ unique(dataRSDFull$asylum[dataRSDFull$ApplicationDataType == "C" & dataRSDFull$Y
 View(sqafList)
 glimpse(sqafList)
 
+# Ensure that the result, severity and year are all integers
+sqafList$Year <- as.integer(sqafList$Year)
+sqafList$Result <- as.integer(sqafList$Result)
+sqafList$Severity <- as.integer(sqafList$Severity)
+
 
 # Note that even with these na and nulls specified, if a field is NA it is simply not included in the data
 # This is particularly the case with the PopulationType, Asylum and Origin.  We might need to find a better approach for handling these
-x <- toJSON(sqafList, na="string", null="list")
+#x <- toJSON(sqafList, na="string", null="list")
 #x <- jsonlite::toJSON(sqafList, auto_unbox=TRUE)
 #glimpse(x)
 #cat(x)
 
-
+# Join the descriptions to the data (Is this required???????????)
+#sqafList <- left_join(sqafList, sqafChecks %>% select(ID, Description), by=c("ID"="ID"))
+# Write out the JSON data
 write( toJSON(sqafList), paste0(sqafDirectoryName, "/SQAF_Output.json"))
 
 
+# And write out the lookup of the list of tests (ensuring the ID remains as a character string)
+#y <- toJSON(sqafChecks %>% select(ID, Description), na="string", null="list")
+write( toJSON(
+          sqafChecks %>% 
+            select(ID, Description) %>% 
+            mutate_if(is.numeric, as.character)), 
+       paste0(sqafDirectoryName, "/SQAF_Checks.json"))
+
+
+View(sqafChecks)
+
+View(dataDemographics)
 
 
 
@@ -189,7 +211,15 @@ write( toJSON(sqafList), paste0(sqafDirectoryName, "/SQAF_Output.json"))
 
 View(dataSTAUDN)
 View(gr)
+View(dataPoCs)
 
+
+sum(dataDemographics$total[dataDemographics$asylum == "LBY" & dataDemographics$origin == "ERT" & dataDemographics$PT == "REF"])
+dataDemographics$Enumerator = dataDemographics$totalFemale_0_4 + dataDemographics$totalFemale_5_11 + dataDemographics$totalFemale_12_17 + 
+  dataDemographics$totalFemale_18_59 + dataDemographics$totalFemale_60 + 
+  dataDemographics$totalMale_0_4 + dataDemographics$totalMale_5_11 + dataDemographics$totalMale_12_17 + 
+  dataDemographics$totalMale_18_59 + dataDemographics$totalMale_60
+sum(dataDemographics$Enumerator[dataDemographics$asylum == "LBY" & dataDemographics$origin == "ERT" & dataDemographics$PT == "REF"])
 
 #print(DataFrameColumnExists(sqafList,"ID"))
 

@@ -28,7 +28,7 @@ sqafList <-
   data.frame(
     ID = character(), # e.g. the SQAF ID 1.2.3
     
-    CheckDescription = character(),
+    Notes = character(),
     
     # THe action is redundant and should be included only in the metadata
     #ActionDescription = character(),
@@ -64,7 +64,7 @@ AppendSQAFItem <-
     sqafList[nrow(sqafList) + 1,] <<- 
       
       c(as.character(sqafID), # ID
-        as.character(msgCheck), # Check message
+        as.character(msgCheck), # Additional Notes
 #        as.character(msgAction), # Action message
         perc, # Percentage result
         threshold, # Severity
@@ -87,59 +87,69 @@ AppendSQAFItem <-
 GenerateThresholdAndMessages <-
   #function(sqafID, origin, asylum, populationType, stubAction, perc, additionalMessage = "") {
   function(sqafID, origin, asylum, populationType, perc, additionalMessage = "") {
-    
-#    msgAction <- stubAction
-    msgCheck <- paste0("The check '", sqafChecks$Description[sqafChecks$ID == sqafID], "'")
-    
+
     # Get the relevant sqaf check
     sqafCheck <- sqafChecks[sqafChecks$ID == sqafID,]
+        
+    # 15-March-2021 - do not build this message as it is essentially redundant.  Just include the description of the check...
+    # And the additional message (if present)
+    #msgCheck <- paste0(sqafCheck$Description, ".")
+    msgCheck <- NA
+    
+    if(! is.na(additionalMessage) & length(additionalMessage) > 0 & additionalMessage != "") {
+      #msgCheck <- paste0(msgCheck, "  ", additionalMessage, ".")
+      #msgCheck <- paste0(msgCheck, additionalMessage, ".")
+      msgCheck <- paste0(additionalMessage, ".")
+    }
+    
+    
+#    msgCheck <- paste0("The check '", sqafChecks$Description[sqafChecks$ID == sqafID], "'")
     
     
     # Build the message describing the check, including the applicable parameters (PT, asylum and origin) e.g.
     # "The check 'My check' for country of asylum ASY and population type PT achieved 12%.
-    
-    numParams <- sum(!is.null(origin), !is.null(asylum), !is.null(populationType))
+#    numParams <- sum(!is.null(origin), !is.null(asylum), !is.null(populationType))
     
     # If we have some parameters to present, lets start the half sentence
-    if( numParams >= 1) {
-      msgCheck <- paste0(msgCheck, " for ")  
-    }
+#    if( numParams >= 1) {
+#      msgCheck <- paste0(msgCheck, " for ")  
+#    }
     # Now build the list of params
-    paramString <- ""
+#    paramString <- ""
     
     # Origin
-    if( ! IsNNN(origin)) {
-      paramString <- paste0("country of origin ", origin )
-    }
+#    if( ! IsNNN(origin)) {
+#      paramString <- paste0("country of origin ", origin )
+#    }
     
     # Asylum
-    if( ! IsNNN(asylum)) {
-      # Add a comma if there are more than 2 params, otherwise and if there are exactly 2
-      if( length(paramString) > 0) {
-        if ( numParams == 2 ) {
-          paramString <- paste0(paramString, " and " )
-        } else if ( numParams == 3 ) {
-          paramString <- paste0(paramString, ", " )
-        }
-      }      
-      
-      paramString <- paste0(paramString, "country of asylum ", asylum )
-    }
+#    if( ! IsNNN(asylum)) {
+#      # Add a comma if there are more than 2 params, otherwise and if there are exactly 2
+#      if( length(paramString) > 0) {
+#        if ( numParams == 2 ) {
+#          paramString <- paste0(paramString, " and " )
+#        } else if ( numParams == 3 ) {
+#          paramString <- paste0(paramString, ", " )
+#        }
+#      }      
+#      
+#      paramString <- paste0(paramString, "country of asylum ", asylum )
+#    }
 
-    # Population type
-    if( ! IsNNN(populationType)) {
-      # Add an and as this is the last parameter, as long as there are more than one parameter
-      if( length(paramString) > 0) {
-        if ( numParams > 1 ) {
-          paramString <- paste0(paramString, " and " )
-        }
-      }
-      
-      paramString <- paste0(paramString, "population type ", populationType )
-    }
-    
-    # And then add the %
-    msgCheck <- paste0(msgCheck, paramString, " achieved ", round(perc), "%  ", additionalMessage, "." )
+#    # Population type
+#    if( ! IsNNN(populationType)) {
+#      # Add an and as this is the last parameter, as long as there are more than one parameter
+#      if( length(paramString) > 0) {
+#        if ( numParams > 1 ) {
+#          paramString <- paste0(paramString, " and " )
+#        }
+#      }
+#      
+#      paramString <- paste0(paramString, "population type ", populationType )
+#    }
+#    
+#    # And then add the %
+#    msgCheck <- paste0(msgCheck, paramString, " achieved ", round(perc), "%  ", additionalMessage, "." )
         
 
 
@@ -169,6 +179,8 @@ GenerateThresholdAndMessages <-
       } else if ( IsNNN(sqafCheck$Threshold_1) | perc <= sqafCheck$Threshold_1) {
         threshold <- 1
 #        msgCheck <- paste0(msg1, msgCheck)
+        
+        # What about silly %'s > 100?
       }        
       
     } else if ( sqafCheck$Quality_Scale == "LowToHigh" ) {
@@ -495,6 +507,7 @@ CheckDemographicCoverage <-
 
 #View(demoData)    
 
+
     # Then run the rule based on the % occurence of this value (population occurrence rather than rowwise)    
     RunRuleBasedOnPercentageByAsylumAndPT(sqafID, demoData, "total")
 
@@ -796,7 +809,11 @@ CheckRefugeeReturns <-
     #--1-- Extract the returns   
     dataReturns <- CompareRefugeeReturns(dataREFROC, dataRET, isASR )
     
+    # OK here we need to catch infinite percentages - and use a special 1,000,000 number so that they still appear as errors.
+    dataReturns$Perc[is.infinite(dataReturns$Perc)] <- 1000000
 
+#View(dataReturns)    
+    
 #    stubAction <- "Review together the differences in the number of returns recorded by the country of origin and the country(ies) of asylum.
 #    Small differences are completely acceptable, but large differences should be rare."
         
@@ -805,13 +822,13 @@ CheckRefugeeReturns <-
     
     for( i in 1 : nrow(dataReturns)) {
       
-      additionalMessage <- paste0("(", 
+      additionalMessage <- paste0("Comparison: ", 
                                   PrettyNum(dataReturns$RETPopulation[i]), 
                                   " by country of origin versus ", 
                                   PrettyNum(dataReturns$REFROCPopulation[i]), 
                                   " by country of asylum, i.e. a difference of ", 
-                                  PrettyNum(dataReturns$Diff[i]), 
-                                  ")")
+                                  PrettyNum(dataReturns$Diff[i])
+                                  )
       
       output <- GenerateThresholdAndMessages(
         sqafID,
@@ -1227,7 +1244,7 @@ CheckStatelessDisplacedGAZ <- function(sqafID, dataSTA, isASR) {
 
 #-------------------------------------------------------------------------------------------------------------------------
 # 8.1
-ChangeSignificantChange <- function(sqafID, dataCube) {
+ChangeSignificantChange <- function(sqafID, dataLatest, dataHistoric) {
   
   # Get the current number of rows outputted...
   currentNumRows <- nrow(sqafList)
