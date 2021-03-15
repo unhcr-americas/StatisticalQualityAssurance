@@ -458,12 +458,42 @@ RunCategoricalRuleBasedOnPercentage <- function(sqafID, data, doGroupByPT, count
 
 
 #-------------------------------------------------------------------------------------------------------------------------
+# 0.1 Checks that data has been received
+CheckDataReceived <-
+  function(sqafID, gr, countryList) {
+    
+    currentNumRows <- nrow(sqafList)
+    
+    # Invalid aggregation types (including blank ones) - this was the wrong way round logically previously; now corrected.
+#    ruleList <- data.frame( 
+#      name = "Empty or invalid aggregation type",
+#      description = "Detailed adult age cohorts", 
+#      rule = paste0("AggregationType != '' & AggregationType %in% c(\"",
+#                    paste(validAggregationTypes, collapse="\",\"", sep=""), "\")")
+#      
+#      #      rule = paste0("AggregationType == '' | ! AggregationType %in% c(\"",
+#      #                    paste(validAggregationTypes, collapse="\",\"", sep=""), "\")")
+#      
+#    )    
+    
+#    RunValidationChecks(sqafID, dataSubSet, ruleListRow)
+    
+
+    returnValue <- success
+    
+    
+    # Pretty basic success criteria so far - basically that the function successfully adds some rows.
+    success <- nrow(sqafList) - currentNumRows > 0
+    returnValue <- success
+    
+  }
+
+
+#-------------------------------------------------------------------------------------------------------------------------
 # 1.1 Checks the demographic coverage by Country of asylum, and Population type
 # Returns a data frame including the asylum codes, as well as two columns specifying the %coverage for sex and sex+age
 CheckDemographicCoverageAgeSex <-
   function(sqafID, demoData) {
-    
-#View(demoData)    
     
     success <- CheckDemographicCoverage(sqafID, demoData, TRUE)    
     
