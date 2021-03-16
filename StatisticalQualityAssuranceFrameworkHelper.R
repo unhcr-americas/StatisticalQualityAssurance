@@ -1275,6 +1275,40 @@ CheckRSDOverTime <-
   }    
 
 
+#-------------------------------------------------------------------------------------------------------------------------
+# 4.4 Check average case size
+CheckAverageCaseSize <-
+  function(sqafID, dataRSD) {
+    
+    #--0-- Get the current number of rows outputted...
+    currentNumRows <- nrow(sqafList)
+    
+
+    #--1-- Build the rules
+    ruleList <- data.frame( 
+      name = "Applications reported as persons should always have an average case size of 0 or 1",
+      description = "Applications reported as persons should always have an average case size of 0 or 1", 
+      rule = "ApplicationDataType == 'C' | (ApplicationDataType == 'P' & ApplicationAveragePersonsPerCase %in% c(0,1))"
+    )
+    
+    
+    # Check 2 - No UNHCR recognitions are included under other
+    r2 <- c( "Decisions reported as persons should always have an average case size of 0 or 1", 
+             "Decisions reported as persons should always have an average case size of 0 or 1",
+             
+             "DecisionDataType == 'C' | (DecisionDataType == 'P' & DecisionAveragePersonsPerCase %in% c(0,1))"
+    )
+    ruleList <- rbind(ruleList, r2)      
+    
+    #--2-- Now iterate through the rules and filter the data, then confront only the filtered data
+    RunValidationChecks(sqafID, dataRSD, ruleList)
+    
+    
+    #--3-- Pretty basic success criteria so far - basically that the function successfully adds some rows.
+    success <- nrow(sqafList) - currentNumRows > 0
+    returnValue <- success  
+    
+  }    
 
 
 #-------------------------------------------------------------------------------------------------------------------------
