@@ -259,7 +259,8 @@ RunValidationChecks <-
               popType,
   #            stubAction, 
               0,
-              ""
+              ruleListRow$description # Include the description here which is useful especially when there are multiple issues
+              #""
             )
             
             # Check whether the PT, origin and asylum are set - should be handled in AppendSQAFItem?
@@ -338,7 +339,8 @@ RunRuleBasedOnPercentageByAsylumAndPT <- function(sqafID, data, countColName) {
 #-------------------------------------------------------------------------------------------------------------------------
 # Automatically calculated the % occurence of a particular categorical value by country of asylum
 # Optionally also includes the option to additionally filter by PT (populationType)
-RunCategoricalRuleBasedOnPercentage <- function(sqafID, data, doGroupByPT, countColName, filterColName, filterValue) {
+RunCategoricalRuleBasedOnPercentage <- function(sqafID, data, doGroupByPT, countColName, filterColName, filterValue, additionalWarningNote="") {
+  
   
   #--1-- Filter out the rows with zero as total - these are not relevant to this check
   data <- data %>% filter(!! as.name(countColName) > 0)
@@ -434,6 +436,11 @@ RunCategoricalRuleBasedOnPercentage <- function(sqafID, data, doGroupByPT, count
       dataSummary3$Perc[i]
     )
     
+    # Assign the additional warning note if it has been set and the severity threshold warrants it.
+    if ( output$threshold >= 2 & ! IsNNN(additionalWarningNote) & additionalWarningNote != "") {
+      output$msgCheck <- additionalWarningNote
+    }
+    
     
     # Assign the new info to the global list
     AppendSQAFItem(sqafID, output$msgCheck, 
@@ -460,27 +467,106 @@ RunCategoricalRuleBasedOnPercentage <- function(sqafID, data, doGroupByPT, count
 #-------------------------------------------------------------------------------------------------------------------------
 # 0.1 Checks that data has been received
 CheckDataReceived <-
-  function(sqafID, gr, countryList) {
+  function(sqafID, gr) {
     
     currentNumRows <- nrow(sqafList)
     
-    # Invalid aggregation types (including blank ones) - this was the wrong way round logically previously; now corrected.
-#    ruleList <- data.frame( 
-#      name = "Empty or invalid aggregation type",
-#      description = "Detailed adult age cohorts", 
-#      rule = paste0("AggregationType != '' & AggregationType %in% c(\"",
-#                    paste(validAggregationTypes, collapse="\",\"", sep=""), "\")")
-#      
-#      #      rule = paste0("AggregationType == '' | ! AggregationType %in% c(\"",
-#      #                    paste(validAggregationTypes, collapse="\",\"", sep=""), "\")")
-#      
-#    )    
+    # We ignore the "Non-submissions" from these: "AND", "SMA", "VAT"
+    countryList <- c("ABW","AFG","AIA","ALB","ALG","ANG","ANT","ARE","ARG", 
+                     "ARM","AUL","AUS","AZE","BAH","BAR","BDI","BEL","BEN","BER",
+                     "BES","BGD","BHS","BKF","BLR","BOL","BOT","BRA","BRU","BSN",
+                     "BUL","BVI","BZE","CAM","CAN","CAR","CAY","CHD","CHI","CHL",
+                     "CMR","COB","COD","COL","COS","CUB","CUW","CVI","CYP","CZE",
+                     "DEN","DJB","DMA","DOM","ECU","ERT","EST","ETH","FIJ","FIN",
+                     "FRA","FSM","GAB","GAM","GBR","GEO","GFR","GHA","GNB","GRE",
+                     "GRN","GUA","GUI","GUY","HAI","HKG","HON","HRV","HUN","ICE",
+                     "ICO","IND","INS","IRE","IRN","IRQ","ISR","ITA","JAM","JOR",
+                     "JPN","KAZ","KEN","KGZ","KOR","KOS","KUW","LAO","LBR","LBY",
+                     "LCA","LEB","LES","LIE","LKA","LTU","LUX","LVA","MAC","MAD",
+                     "MAU","MCD","MCO","MDA","MEX","MLI","MLS","MLW","MNE","MNG",
+                     "MOR","MOZ","MSR","MTA","MTS","MYA","NAM","NEP","NET","NGR",
+                     "NIC","NIG","NOR","NRU","NZL","OMN","PAK","PAN","PAR","PER",
+                     "PHI","PLW","PNG","POL","POR","QAT","ROM","RSA","RUS","RWA",
+                     "SAL","SAU","SEN","SEY","SIN","SLE","SOL","SOM","SPA",
+                     "SRB","SRV","SSD","STK","SUD","SUR","SVK","SVN","SWA","SWE",
+                     "SWI","SXM","SYR","TAN","TCI","THA","TJK","TKM","TMP","TOG",
+                     "TON","TRT","TUN","TUR","UAE","UGA","UKR","URU","USA","UZB",
+                     "VAN","VCT","VEN","WES","YEM","ZAM","ZIM") 
     
-#    RunValidationChecks(sqafID, dataSubSet, ruleListRow)
+    # Strip out the IDMC and UNRWA data
+    gr <- gr %>% filter(! populationType %in% c("Total", "IDMC", "UNRWA"))
+    
+    # get the unique list from the gr dataset
+    coaList <- unique(gr$CoA)
+    
+    # No need to do an intersect, but lets include it anyway:
+    print(paste0("Found ", length(intersect(coaList,countryList)), " countries of asylum that have submitted data."))
+
+    missingSubmissions <- setdiff(countryList, coaList)
+    print(paste0("Found ", length(missingSubmissions), " countries of asylum that have MISSING data submissions."))
+    
+    incorrectSubmissions <- setdiff(coaList, countryList)
+    print(paste0("Found ", length(incorrectSubmissions), " countries of asylum that have UNEXPECTED data submissions."))
     
 
-    returnValue <- success
+    #--2-- Loop through them and identify any we need to record as messages
+    numViolating <- 0
     
+    # Loop through the missing submissions
+    if( length(missingSubmissions) > 0 ) {
+      for( i in 1 : length(missingSubmissions)) {
+        
+        additionalMessage <- paste0("No data has yet been submitted")
+        
+        output <- GenerateThresholdAndMessages(
+          sqafID,
+          NA, 
+          missingSubmissions[i],
+          NA,
+          0,
+          additionalMessage
+        )
+        
+        # Assign the new info to the global list
+        AppendSQAFItem(sqafID, output$msgCheck, 
+                       0, output$threshold, 
+                       sqafYear, NA, NA, missingSubmissions[i])
+        
+        
+        if (output$threshold >= 2) {
+          numViolating <- numViolating + 1
+        }
+        
+      }    
+    }
+    
+    # Loop through the incorrect submissions
+    if( length(incorrectSubmissions) > 0 ) {
+      for( i in 1 : length(incorrectSubmissions)) {
+        
+        additionalMessage <- paste0("Data has been submitted unexpectedly")
+        
+        output <- GenerateThresholdAndMessages(
+          sqafID,
+          NA, 
+          incorrectSubmissions[i],
+          NA,
+          0,
+          additionalMessage
+        )
+        
+        # Assign the new info to the global list
+        AppendSQAFItem(sqafID, output$msgCheck, 
+                       0, output$threshold, 
+                       sqafYear, NA, NA, incorrectSubmissions[i])
+        
+        
+        if (output$threshold >= 2) {
+          numViolating <- numViolating + 1
+        }
+        
+      }  
+    }
     
     # Pretty basic success criteria so far - basically that the function successfully adds some rows.
     success <- nrow(sqafList) - currentNumRows > 0
@@ -794,12 +880,15 @@ CheckDemographicAccommodationType <- function(sqafID, dataDemo) {
   #--0-- Get the current number of rows outputted...
   currentNumRows <- nrow(sqafList)
   
+  #--1-- Get the relevant sqaf check
+  sqafCheck <- sqafChecks[sqafChecks$ID == sqafID,]
   
-  # This style of test where we want to look for the % of a specific variable value is now encapsulated in this function
-  RunCategoricalRuleBasedOnPercentage(sqafID, dataDemo, TRUE, "total", "accommodationType", "U" )
+  
+  #--2-- This style of test where we want to look for the % of a specific variable value is now encapsulated in this function
+  RunCategoricalRuleBasedOnPercentage(sqafID, dataDemo, TRUE, "total", "accommodationType", "U", sqafCheck$Explanation )
   
   
-  # Pretty basic success criteria so far - basically that the function successfully adds some rows.
+  #--3-- Pretty basic success criteria so far - basically that the function successfully adds some rows.
   success <- nrow(sqafList) - currentNumRows > 0
   returnValue <- success  
   
@@ -950,7 +1039,7 @@ CheckRefugeeBasis <- function(sqafID, dataREF, isASR) {
     ruleList <- data.frame( 
       name = "Estimated basis for refugee data",
       description = "Avoid estimates if possible for the refugee data", 
-      rule = paste0("basis == 'E'")
+      rule = paste0("basis != 'E'")
       
     )
     
@@ -988,7 +1077,7 @@ CheckUNHCRRSDProcedures <-
     
     # Check 2 - No UNHCR recognitions are included under other
     r2 <- c( "All UNHCR recognitions are under convention/mandate", 
-             "As all UNHCR recognitions are under convention/mandate none should be recognised as others.",
+             "As all UNHCR recognitions are under convention/mandate, none should be recognised as others",
              
              "ProcedureType %in% c('G', 'J') | 
              (ProcedureType == 'U' & RecognizedOther == 0)"
@@ -998,7 +1087,7 @@ CheckUNHCRRSDProcedures <-
     # Checks 3 and 4 - Applications/Decisions MUST equal persons (P) (Reason: UNHCR does not report mandate RSD in cases)
     
     r3 <- c( "All UNHCR application procedures related to persons not cases", 
-             "For all UNHCR procedures, Applications MUST equal persons (P) (Reason: UNHCR does not report mandate RSD in cases).",
+             "For all UNHCR procedures, Applications MUST equal persons (P) (Reason: UNHCR does not report mandate RSD in cases)",
              
              "ProcedureType %in% c('G', 'J') | 
              (ProcedureType == 'U' & ApplicationDataType == 'P')"
@@ -1006,7 +1095,7 @@ CheckUNHCRRSDProcedures <-
     ruleList <- rbind(ruleList, r3)    
     
     r4 <- c( "All UNHCR decision procedures related to persons not cases", 
-             "For all UNHCR procedures, Decisions MUST equal persons (P) (Reason: UNHCR does not report mandate RSD in cases).",
+             "For all UNHCR procedures, Decisions MUST equal persons (P) (Reason: UNHCR does not report mandate RSD in cases)",
              
              "ProcedureType %in% c('G', 'J') | 
              (ProcedureType == 'U' & DecisionDataType == 'P')"
@@ -1140,12 +1229,12 @@ CheckRSDOverTime <-
     #--4-- Build the tests
     ruleList <- data.frame( 
       name = "RSD procedure type government -> joint",
-      description = "If a country reports type of RSD procedure Government one year and type of procedure as Joint the following year", 
+      description = "Countries are highly unlikely to report their type of RSD procedure Government one year and change this to Joint the following year", 
       rule = paste0("HistoricG == '' | CurrentJ == ''")
     )
     
     r2 <- c( "RSD procedure type government, joint -> UNHCR", 
-             "If a country reports Government or Joint cases in the past and then reports only UNHCR cases.",
+             "Countries are highly unlikely to report the source of cases as Government or Joint in the past and then change this to report only UNHCR cases.",
              "HistoricJG == '' | CurrentU == ''"
     )
     ruleList <- rbind(ruleList, r2)    
@@ -1171,6 +1260,8 @@ CheckStatelessOrigin <- function(sqafID, dataSTA, isASR) {
   # Get the current number of rows outputted...
   currentNumRows <- nrow(sqafList)
   
+  # Ensure we have a PT in the stateless table!
+  dataSTA$PT <- "STA"
   
   # Then calc the % that is STA or UKN for each country of asylum
   countColName = GetCountColumnName("STA", isASR, FALSE)
@@ -1178,63 +1269,72 @@ CheckStatelessOrigin <- function(sqafID, dataSTA, isASR) {
   # Standardise STA, UKN and VAR to all be STA
   dataSTA$origin[dataSTA$origin %in% c("STA", "UKN", "VAR")] <- "STA"
   
-  ###############################################################################
-  RunCategoricalRuleBasedOnPercentage(sqafID, dataSTA, FALSE, countColName, "origin", "STA" )
-  ##########################################################################
   
-  # Summarise the STA data by asylum and origin
-  dataSummary <- dataSTA %>% 
-    group_by(asylum, origin) %>%
-    summarise(
-      Enumerator = sum(!! as.name(countColName))
-    )
+  # Then run the rule ... we can group by PT as we only have one pt, so it is simple....
+  RunCategoricalRuleBasedOnPercentage(sqafID, dataSTA, TRUE, countColName, "origin", "STA",
+    "If possible, the origin in the Stateless table should record the specific countries of former habitual residence for displaced STA (e.g. the Rohingya) rather than the generic STA/UKN/VAR.")
+
   
-  # Then summarise by asylum and get the total and the % for each origin
-  dataSummary2 <- dataSummary %>%
-    group_by(asylum) %>%
-    summarise (
-      Total = sum(Enumerator)
-    ) 
+  # If the output is a warning or an error, lets include an additional message.
+  # We do that by applying it directly to the SQAF list
+#  sqafList$Notes[sqafList$ID == sqafID & sqafList$Severity >= 2 ] <-
+    
+  
+  
+  
+#  # Summarise the STA data by asylum and origin
+#  dataSummary <- dataSTA %>% 
+#    group_by(asylum, origin) %>%
+#    summarise(
+#      Enumerator = sum(!! as.name(countColName))
+#    )
+#  
+#  # Then summarise by asylum and get the total and the % for each origin
+#  dataSummary2 <- dataSummary %>%
+#    group_by(asylum) %>%
+#    summarise (
+#      Total = sum(Enumerator)
+#    ) 
 
   # then group by asylum and join to a filtered version with just STA
-  dataSummary3 <- left_join(
-                      dataSummary2, 
-                      dataSummary %>% filter(origin == "STA") %>% select(asylum, Enumerator),
-                      by=c("asylum"="asylum")
-                    )
+#  dataSummary3 <- left_join(
+#                      dataSummary2, 
+#                      dataSummary %>% filter(origin == "STA") %>% select(asylum, Enumerator),
+#                      by=c("asylum"="asylum")
+#                    )
   
-  dataSummary3[is.na(dataSummary3)] <- 0
-  dataSummary3$Perc <- dataSummary3$Enumerator / dataSummary3$Total * 100
+#  dataSummary3[is.na(dataSummary3)] <- 0
+#  dataSummary3$Perc <- dataSummary3$Enumerator / dataSummary3$Total * 100
     
   #View(dataSummary3)    
   
 
-  numViolating = 0
+#  numViolating = 0
   
-  for( i in 1 : nrow(dataSummary3)) {
+#  for( i in 1 : nrow(dataSummary3)) {
     
-    output <- GenerateThresholdAndMessages(
-      sqafID,
-      NULL, 
-      dataSummary3$asylum[i],
-      NULL,
-      #                  stubAction, 
-      dataSummary3$Perc[i]
-    )
+#    output <- GenerateThresholdAndMessages(
+#      sqafID,
+#      NULL, 
+#      dataSummary3$asylum[i],
+#      NULL,
+#      #                  stubAction, 
+#      dataSummary3$Perc[i]
+#    )
     
     
-    # Assign the new info to the global list
-    AppendSQAFItem(sqafID, output$msgCheck, #output$msgAction, 
-                   dataSummary3$Perc[i], output$threshold, 
-                   sqafYear, "STA", NA, dataSummary3$asylum[i])
+#    # Assign the new info to the global list
+#    AppendSQAFItem(sqafID, output$msgCheck, #output$msgAction, 
+#                   dataSummary3$Perc[i], output$threshold, 
+#                   sqafYear, "STA", NA, dataSummary3$asylum[i])
     
-    if (output$threshold >= 2) {
-      numViolating <- numViolating + 1
-    }
+#    if (output$threshold >= 2) {
+#      numViolating <- numViolating + 1
+#    }
     
-  }
+#  }
   
-  print(paste0("Found ", numViolating, " countries of asylum violating the test"))
+#  print(paste0("Found ", numViolating, " countries of asylum violating the test"))
   
 
   # Pretty basic success criteria so far - basically that the function successfully adds some rows.
@@ -1252,6 +1352,8 @@ CheckStatelessDisplacedGAZ <- function(sqafID, dataSTA, isASR) {
   # Get the current number of rows outputted...
   currentNumRows <- nrow(sqafList)
   
+  # Ensure we have a PT in the stateless table!
+  dataSTA$PT <- "STA"
   
   # Add the basis
   ruleList <- data.frame( 
@@ -1297,10 +1399,12 @@ CheckGeneralMissingBasis <- function(sqafID, dataREF, dataROC, dataRET, dataIDP,
   # Get the current number of rows outputted...
   currentNumRows <- nrow(sqafList)
   
-  # Standardise the RET population type
-  dataRET$populationType[dataRET$typeOfPopulation == "Refugee"] <- "REF"
-  dataRET$populationType[dataRET$typeOfPopulation == "Refugee-like"] <- "ROC"
+  # Standardise the RET population type to use RET so we can identify it
+  dataRET$populationType[dataRET$typeOfPopulation == "Refugee"] <- "RET"
+  dataRET$populationType[dataRET$typeOfPopulation == "Refugee-like"] <- "RET"
   
+  # And also make sure we have included the stateless too
+  dataSTA$populationType <- "STA"
   
   datasets <- list(dataREF, dataROC, dataRET, dataIDP, dataSTA, dataOOC, dataVDA, dataHST)
   
@@ -1316,14 +1420,14 @@ CheckGeneralMissingBasis <- function(sqafID, dataREF, dataROC, dataRET, dataIDP,
     ruleList <- data.frame( 
       name = "Missing basis",
       description = "The basis should be included for all data", 
-      rule = paste0("basis == ''")
+      rule = paste0("basis != ''")
       
     )
     
     # Add the source
     r2 <- c( "Missing source", 
              "The source should be included for all data",
-             "source == ''"
+             "source != ''"
              
     )
     ruleList <- rbind(ruleList, r2)
@@ -1374,7 +1478,7 @@ CheckGeneralDispacedOriginAsylum <- function(sqafID, dataPopulation) {
   # Add the rule
   ruleList <- data.frame( 
     name = "Origin should not be the same asylum",
-    description = "For internationally forcibly displaces (REF, ROC, ASY, VDA), the country of origin should not be the same as the country of asylum", 
+    description = "For internationally forcibly displaced (REF, ROC, ASY, VDA), the country of origin should not be the same as the country of asylum", 
     rule = paste0("origin != asylum")
     
   )
@@ -1424,21 +1528,38 @@ CheckCountryCodes <- function(sqafID, gr) {
   
   # Standardise the column names
   gr$PT <- gr$populationType  
+  gr$origin <- gr$CoO
+  gr$asylum <- gr$CoA
   
-  ##########################################
+  # Strip out the IDMC and UNRWA data
+  gr <- gr %>% filter(! populationType %in% c("Total", "IDMC", "UNRWA"))
+  
+  
+  # get the source data with the definitive list of country codes
+  countryList <- read_excel(paste0(rootOneDriveDirectory, "Reporting guidelines/Country_Codes.xlsx"), 
+                        sheet=1, range = cell_cols("A:B"), n_max=200000)
+  
+#View(countryList)  
   
   # Get the full list of country codes from our official list
   # (we can do this in the same way for the missing country data.)
-  
   # Add the rule
   ruleList <- data.frame( 
-    name = "VEN internationally displaced should now be recorded in the VDA table",
-    description = "Previously, the Venezuelans Displaced Abroad were recorded in the OOC table.  Now, VEN internationally forcibly displaced should now be recorded in the VDA table.", 
-    rule = paste0("origin != 'VEN' | (origin == 'VEN' & asylum == 'VEN')")
+    name = "Invalid country of asylum",
+    description = "Invalid country of asylum", 
+    rule = paste0("asylum %in% c('", paste0(c(countryList$UNHCR_code), collapse= "','"), "')")
     
   )
   
-  RunValidationChecks(sqafID, dataOOC, ruleList)  
+  r2 <- c( "Invalid country of origin", 
+           "Invalid country of origin",
+           paste0("origin %in% c('", paste0(c(countryList$UNHCR_code), collapse= "','"), "')")
+  )
+  ruleList <- rbind(ruleList, r2)    
+  
+  
+  # Then run the checks...
+  RunValidationChecks(sqafID, gr, ruleList)  
   
   # Pretty basic success criteria so far - basically that the function successfully adds some rows.
   success <- nrow(sqafList) - currentNumRows > 0

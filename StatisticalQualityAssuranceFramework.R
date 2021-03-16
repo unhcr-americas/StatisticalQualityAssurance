@@ -149,6 +149,7 @@ for( i in 1: nrow(sqafChecks)) {
     
   }
   
+
   
   
   success <- eval(parse(text=paste0(sqafChecks$R_Validation_Function[i],"('",sqafChecks$ID[i],"', ", argStr, ")")))
@@ -161,14 +162,10 @@ for( i in 1: nrow(sqafChecks)) {
 
 
 
-unique(dataRSDFull$asylum[dataRSDFull$ApplicationDataType == "C" & dataRSDFull$Year == 2018])
 
 
 #-------------------------------------------------------------------------------------------------------------------------
 # Export the SQAF list as JSON
-
-View(sqafList)
-glimpse(sqafList)
 
 # Ensure that the result, severity and year are all integers
 sqafList$Year <- as.integer(sqafList$Year)
@@ -198,10 +195,6 @@ write( toJSON(
        paste0(sqafDirectoryName, "/SQAF_Checks.json"))
 
 
-View(sqafChecks)
-
-View(dataDemographics)
-
 
 
 
@@ -209,10 +202,20 @@ View(dataDemographics)
 #-------------------------------------------------------------------------------------------------------------------------
 # Testing .............................
 
+paste0(c("Test", sqafChecks$ID), collapse= ", ")
+
+View(sqafList)
+View(sqafChecks)
+
+View(dataDemographics)
+
+glimpse(sqafList)
 View(dataSTAUDN)
 View(gr)
 View(dataPoCs)
 
+
+unique(dataRSDFull$asylum[dataRSDFull$ApplicationDataType == "C" & dataRSDFull$Year == 2018])
 
 sum(dataDemographics$total[dataDemographics$asylum == "LBY" & dataDemographics$origin == "ERT" & dataDemographics$PT == "REF"])
 dataDemographics$Enumerator = dataDemographics$totalFemale_0_4 + dataDemographics$totalFemale_5_11 + dataDemographics$totalFemale_12_17 + 
@@ -249,6 +252,34 @@ tempDodgyList <- violating(dataDemographics, validator(AggregationType != '' & A
 unique(dataDemographics$AggregationType)
 nrow(tempDodgyList)
 
+
+
+# get the source data with the definitive list of country codes
+countryListTemp <- read_excel(paste0(rootOneDriveDirectory, "Reporting guidelines/Country_Codes.xlsx"), 
+                          sheet=1, range = cell_cols("A:B"), n_max=200000)
+
+
+View(countryListTemp)
+
+# Get the full list of country codes from our official list
+# (we can do this in the same way for the missing country data.)
+# Add the rule
+ruleList <- data.frame( 
+  name = "Invalid country of asylum",
+  description = "Invalid country of asylum.", 
+  rule = paste0("CoA %in% c('", paste0(c(countryListTemp$UNHCR_code), collapse= "','"), "')")
+  
+)
+
+r2 <- c( "Invalid country of origin", 
+         "Invalid country of origin.",
+         paste0("CoO %in% c('", paste0(c(countryListTemp$UNHCR_code), collapse= "','"), "')")
+)
+ruleList <- rbind(ruleList, r2)    
+
+# Then run the checks...
+dodgyList <- violating(gr, validator(.data = ruleList))
+View(dodgyList)
 
 
 
