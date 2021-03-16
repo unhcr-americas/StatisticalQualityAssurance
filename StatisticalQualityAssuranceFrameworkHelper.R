@@ -1016,6 +1016,8 @@ CheckDemographicTotals <- function(sqafID, dataDemo, dataPopulation) {
   # Get the current number of rows outputted...
   currentNumRows <- nrow(sqafList)
   
+  # How do we do this ? Full join?  PT by PT?
+  
   print("!!! NOT YET IMPLEMENTED !!!")
   
   # Pretty basic success criteria so far - basically that the function successfully adds some rows.
@@ -1286,17 +1288,17 @@ CheckAverageCaseSize <-
 
     #--1-- Build the rules
     ruleList <- data.frame( 
-      name = "Applications reported as persons should always have an average case size of 0 or 1",
-      description = "Applications reported as persons should always have an average case size of 0 or 1", 
-      rule = "ApplicationDataType == 'C' | (ApplicationDataType == 'P' & ApplicationAveragePersonsPerCase %in% c(0,1))"
+      name = "Applications reported as persons should always have an average case size of 0",
+      description = "Applications reported as persons should always have an average case size of 0", 
+      rule = "ApplicationDataType == 'C' | (ApplicationDataType == 'P' & ApplicationAveragePersonsPerCase == 0)"
     )
     
     
     # Check 2 - No UNHCR recognitions are included under other
-    r2 <- c( "Decisions reported as persons should always have an average case size of 0 or 1", 
-             "Decisions reported as persons should always have an average case size of 0 or 1",
+    r2 <- c( "Decisions reported as persons should always have an average case size of 0", 
+             "Decisions reported as persons should always have an average case size of 0",
              
-             "DecisionDataType == 'C' | (DecisionDataType == 'P' & DecisionAveragePersonsPerCase %in% c(0,1))"
+             "DecisionDataType == 'C' | (DecisionDataType == 'P' & DecisionAveragePersonsPerCase == 0)"
     )
     ruleList <- rbind(ruleList, r2)      
     
@@ -1315,87 +1317,25 @@ CheckAverageCaseSize <-
 # 6.1
 CheckStatelessOrigin <- function(sqafID, dataSTA, isASR) {
   
-  # Get the current number of rows outputted...
+  #--0-- Get the current number of rows outputted...
   currentNumRows <- nrow(sqafList)
   
-  # Ensure we have a PT in the stateless table!
+  #--1-- Ensure we have a PT in the stateless table!
   dataSTA$PT <- "STA"
   
-  # Then calc the % that is STA or UKN for each country of asylum
+  #--2-- Then calc the % that is STA or UKN for each country of asylum
   countColName = GetCountColumnName("STA", isASR, FALSE)
   
-  # Standardise STA, UKN and VAR to all be STA
+  #--3-- Standardise STA, UKN and VAR to all be STA
   dataSTA$origin[dataSTA$origin %in% c("STA", "UKN", "VAR")] <- "STA"
   
   
-  # Then run the rule ... we can group by PT as we only have one pt, so it is simple....
+  #--4-- Then run the rule ... we can group by PT as we only have one pt, so it is simple....
   RunCategoricalRuleBasedOnPercentage(sqafID, dataSTA, TRUE, countColName, "origin", "STA",
     "If possible, the origin in the Stateless table should record the specific countries of former habitual residence for displaced STA (e.g. the Rohingya) rather than the generic STA/UKN/VAR.")
 
-  
-  # If the output is a warning or an error, lets include an additional message.
-  # We do that by applying it directly to the SQAF list
-#  sqafList$Notes[sqafList$ID == sqafID & sqafList$Severity >= 2 ] <-
-    
-  
-  
-  
-#  # Summarise the STA data by asylum and origin
-#  dataSummary <- dataSTA %>% 
-#    group_by(asylum, origin) %>%
-#    summarise(
-#      Enumerator = sum(!! as.name(countColName))
-#    )
-#  
-#  # Then summarise by asylum and get the total and the % for each origin
-#  dataSummary2 <- dataSummary %>%
-#    group_by(asylum) %>%
-#    summarise (
-#      Total = sum(Enumerator)
-#    ) 
 
-  # then group by asylum and join to a filtered version with just STA
-#  dataSummary3 <- left_join(
-#                      dataSummary2, 
-#                      dataSummary %>% filter(origin == "STA") %>% select(asylum, Enumerator),
-#                      by=c("asylum"="asylum")
-#                    )
-  
-#  dataSummary3[is.na(dataSummary3)] <- 0
-#  dataSummary3$Perc <- dataSummary3$Enumerator / dataSummary3$Total * 100
-    
-  #View(dataSummary3)    
-  
-
-#  numViolating = 0
-  
-#  for( i in 1 : nrow(dataSummary3)) {
-    
-#    output <- GenerateThresholdAndMessages(
-#      sqafID,
-#      NULL, 
-#      dataSummary3$asylum[i],
-#      NULL,
-#      #                  stubAction, 
-#      dataSummary3$Perc[i]
-#    )
-    
-    
-#    # Assign the new info to the global list
-#    AppendSQAFItem(sqafID, output$msgCheck, #output$msgAction, 
-#                   dataSummary3$Perc[i], output$threshold, 
-#                   sqafYear, "STA", NA, dataSummary3$asylum[i])
-    
-#    if (output$threshold >= 2) {
-#      numViolating <- numViolating + 1
-#    }
-    
-#  }
-  
-#  print(paste0("Found ", numViolating, " countries of asylum violating the test"))
-  
-
-  # Pretty basic success criteria so far - basically that the function successfully adds some rows.
+  #--5-- Pretty basic success criteria so far - basically that the function successfully adds some rows.
   success <- nrow(sqafList) - currentNumRows > 0
   returnValue <- success  
 
@@ -1407,13 +1347,13 @@ CheckStatelessOrigin <- function(sqafID, dataSTA, isASR) {
 # 6.2 - Displaced PAL and GAZ origins should not be recorded in the Stateless table
 CheckStatelessDisplacedGAZ <- function(sqafID, dataSTA, isASR) {
   
-  # Get the current number of rows outputted...
+  #--0-- Get the current number of rows outputted...
   currentNumRows <- nrow(sqafList)
   
-  # Ensure we have a PT in the stateless table!
+  #--1-- Ensure we have a PT in the stateless table!
   dataSTA$PT <- "STA"
   
-  # Add the basis
+  #--2-- Add the basis rule
   ruleList <- data.frame( 
     name = "Displaced PAL and GAZ origins should not be recorded in the Stateless table",
     description = "Displaced PAL and GAZ origins should not be recorded in the Stateless table", 
@@ -1421,20 +1361,55 @@ CheckStatelessDisplacedGAZ <- function(sqafID, dataSTA, isASR) {
     
   )
   
+  #--3-- Run the rules
   RunValidationChecks(sqafID, dataSTA, ruleList)      
 
     
-  # Pretty basic success criteria so far - basically that the function successfully adds some rows.
+  #--4-- Pretty basic success criteria so far - basically that the function successfully adds some rows.
   success <- nrow(sqafList) - currentNumRows > 0
 
   returnValue <- success  
 
 }
 
+#-------------------------------------------------------------------------------------------------------------------------
+# 7.1 - Host Community
+CheckHostCommunity <- function(sqafID, dataHST, isASR) {
+  
+  #--0-- Get the current number of rows outputted...
+  currentNumRows <- nrow(sqafList)
+  
+  #--1-- Get the relevant sqaf check
+  sqafCheck <- sqafChecks[sqafChecks$ID == sqafID,]
+  
+  #--2-- Ensure we have a PT in the stateless table!
+  dataHST$PT <- "HST"
+  
+  #--3-- Get the count and assisted column names
+  countColName = GetCountColumnName("HST", isASR, FALSE)
+  assistedColName = GetCountColumnName("HST", isASR, TRUE)
+  
+  #--4-- Add the rule
+  ruleList <- data.frame( 
+    name = sqafCheck$Description,
+    description = sqafCheck$Explanation, 
+    rule = paste0(countColName, " == ", assistedColName)
+    
+  )
+  
+  #--5-- Run the rule
+  RunValidationChecks(sqafID, dataHST, ruleList)      
+  
+  
+  #--6-- Pretty basic success criteria so far - basically that the function successfully adds some rows.
+  success <- nrow(sqafList) - currentNumRows > 0
+  returnValue <- success  
+  
+}
 
 #-------------------------------------------------------------------------------------------------------------------------
 # 8.1
-ChangeSignificantChange <- function(sqafID, dataLatest, dataHistoric) {
+CheckSignificantChange <- function(sqafID, dataLatest, dataHistoric) {
   
   # Get the current number of rows outputted...
   currentNumRows <- nrow(sqafList)

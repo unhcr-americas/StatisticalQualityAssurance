@@ -123,7 +123,10 @@ for( i in 1: nrow(sqafChecks)) {
 
   } else if (sqafChecks$Data[i] == "Stateless") {
     argStr <- "dataSTAUDN, sqafIsASR"
-        
+
+  } else if (sqafChecks$Data[i] == "Host-Community") {
+    argStr <- "dataHST, sqafIsASR"
+    
   } else if (sqafChecks$Data[i] == "Asylum-seekers") {
     argStr <- "dataRSD"
 
@@ -211,10 +214,14 @@ View(dataDemographics)
 
 View(dataSTAUDN)
 
+View(dataRSDFull)
+
 glimpse(sqafList)
 View(dataSTAUDN)
 View(gr)
 View(dataPoCs)
+
+View(dataHST)
 
 
 sqafList$Notes[sqafList$ID == "6.1" & sqafList$Severity >= 2 ]
