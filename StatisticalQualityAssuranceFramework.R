@@ -209,11 +209,17 @@ View(sqafChecks)
 
 View(dataDemographics)
 
+View(dataSTAUDN)
+
 glimpse(sqafList)
 View(dataSTAUDN)
 View(gr)
 View(dataPoCs)
 
+
+sqafList$Notes[sqafList$ID == "6.1" & sqafList$Severity >= 2 ] <-
+  "Blah"
+sqafList$Notes[sqafList$ID == "6.1" & sqafList$Severity >= 2 ]
 
 unique(dataRSDFull$asylum[dataRSDFull$ApplicationDataType == "C" & dataRSDFull$Year == 2018])
 

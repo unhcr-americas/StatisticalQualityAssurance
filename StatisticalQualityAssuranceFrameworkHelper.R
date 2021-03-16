@@ -279,7 +279,7 @@ RunValidationChecks <-
 
 #-------------------------------------------------------------------------------------------------------------------------
 # This counts the percentage that a given enumerator column is of the given total
-RunRuleBasedOnPercentageByAsylumAndPT <- function(sqafID, data, countColName) {
+RunRuleBasedOnPercentageByAsylumAndPT <- function(sqafID, data, countColName, additionalWarningNote="") {
   
   #--0-- Test for prerequisites
   if ( DataFrameColumnExists(data, "Enumerator") == FALSE) {
@@ -316,6 +316,10 @@ RunRuleBasedOnPercentageByAsylumAndPT <- function(sqafID, data, countColName) {
       dataSummary$Perc[i]
     )
     
+    # Assign the additional warning note if it has been set and the severity threshold warrants it.
+    if ( output$threshold >= 2 & ! IsNNN(additionalWarningNote) & additionalWarningNote != "") {
+      output$msgCheck <- additionalWarningNote
+    }
     
     # Assign the new info to the global list
     AppendSQAFItem(sqafID, output$msgCheck, 
@@ -602,8 +606,13 @@ CheckDemographicCoverageSex <-
 CheckDemographicCoverage <-
   function(sqafID, demoData, doAgeAndSex) {
     
+    #--0--
     currentNumRows <- nrow(sqafList)
+
+    #--1-- Get the relevant sqaf check
+    sqafCheck <- sqafChecks[sqafChecks$ID == sqafID,]
     
+        
     # Filter out the rows with zero as total - these are not relevant to this check
     demoData <- demoData %>% filter(total > 0)
     
@@ -625,7 +634,7 @@ CheckDemographicCoverage <-
 
 
     # Then run the rule based on the % occurence of this value (population occurrence rather than rowwise)    
-    RunRuleBasedOnPercentageByAsylumAndPT(sqafID, demoData, "total")
+    RunRuleBasedOnPercentageByAsylumAndPT(sqafID, demoData, "total", sqafCheck$Explanation)
 
     
     # Pretty basic success criteria so far - basically that the function successfully adds some rows.
@@ -641,7 +650,12 @@ CheckDemographicCoverage <-
 CheckSubNationalCoverage <-
   function(sqafID, demoData) {
     
+    #--0-- Get the current number of rows
     currentNumRows <- nrow(sqafList)
+    
+    #--1-- Get the relevant sqaf check
+    sqafCheck <- sqafChecks[sqafChecks$ID == sqafID,]
+    
     
     # So the logical test here is that a given CoA has more than one location
     # Too simple right???  
@@ -687,6 +701,11 @@ CheckSubNationalCoverage <-
         dataSummary$NumLocations[i]
       )
       
+      # Assign the additional warning note if it has been set and the severity threshold warrants it.
+      if ( output$threshold >= 2) {
+        output$msgCheck <- sqafCheck$Explanation
+      }
+      
       
       # Assign the new info to the global list
       AppendSQAFItem(sqafID, output$msgCheck, #output$msgAction, 
@@ -727,7 +746,7 @@ CheckDemographicAggregationType <-
     # Invalid aggregation types (including blank ones) - this was the wrong way round logically previously; now corrected.
     ruleList <- data.frame( 
       name = "Empty or invalid aggregation type",
-      description = "Detailed adult age cohorts", 
+      description = "Empty or invalid aggregation type", 
       rule = paste0("AggregationType != '' & AggregationType %in% c(\"",
                     paste(validAggregationTypes, collapse="\",\"", sep=""), "\")")
       
@@ -738,7 +757,7 @@ CheckDemographicAggregationType <-
     
     #"Default", # Detailed
     r1 <- c( validAggregationTypes[1], 
-             "Detailed adult age cohorts",
+             "Detailed adult age cohorts - the data provided does not match the specified aggregation type",
              
              "total==(totalFemaleTotal + totalMaleTotal) &
              
@@ -753,7 +772,7 @@ CheckDemographicAggregationType <-
     
     # M/F and 18-59
     r2 <- c( validAggregationTypes[2], # "18_59", # "M/F and 18-59"
-             "Just the 18-59 adult age cohort",
+             "Just the 18-59 adult age cohort - the data provided does not match the specified aggregation type",
              
              "total==(totalFemaleTotal + totalMaleTotal) &
              
@@ -773,7 +792,7 @@ CheckDemographicAggregationType <-
     
     # M/F    
     r3 <- c( validAggregationTypes[3], # "M_F", #"M/F"
-             "Just disaggregation by sex", 
+             "Just disaggregation by sex - The data provided does not match the specified aggregation type", 
              
              "total==(totalFemaleTotal + totalMaleTotal) &
              
@@ -792,10 +811,10 @@ CheckDemographicAggregationType <-
     
     # Total
     r4 <- c( validAggregationTypes[4], #"Total", 
-             "No disaggregation available",
+             "Aggregation type of Total specified, but some age/sex cohorts have been populated",
              
-             "AggregationType == 'Total' &
-             total >= 0 & totalFemaleTotal == 0 & totalMaleTotal == 0 &
+             # AggregationType == 'Total' &
+             "total >= 0 & totalFemaleTotal == 0 & totalMaleTotal == 0 &
              
              totalFemaleTotal == 0 & Female_Unknown == 0 &
              totalMaleTotal == 0 & Male_Unknown == 0 &
@@ -845,27 +864,29 @@ CheckDemographicAggregationType <-
 # 1.5
 CheckDemographicAgeUnknown <- function(sqafID, dataDemo) {
   
-  # Get the current number of rows outputted...
+  #--0-- Get the current number of rows outputted...
   currentNumRows <- nrow(sqafList)
   
+  #--1-- Get the relevant sqaf check
+  sqafCheck <- sqafChecks[sqafChecks$ID == sqafID,]
   
-  # Filter out the rows with zero as total - these are not relevant to this check
+  #--2-- Filter out the rows with zero as total - these are not relevant to this check
   dataDemo <- dataDemo %>% filter(total > 0)
   
-  # This also only makes sense for Default and 18_59 data
+  #--3-- This also only makes sense for Default and 18_59 data
   dataDemo <- dataDemo %>% filter(AggregationType %in% c("Default", "18_59"))
   
-  # Calculate the total male and female unknown, and the % of these of the total
+  #--4-- Calculate the total male and female unknown, and the % of these of the total
   dataDemo <- dataDemo %>% mutate(
     Enumerator = Female_Unknown + Male_Unknown
   )
   
   
-  # Then run the rule to calculate the percentage by asylum and PT
-  RunRuleBasedOnPercentageByAsylumAndPT(sqafID, dataDemo, "total")
+  #--5-- Then run the rule to calculate the percentage by asylum and PT
+  RunRuleBasedOnPercentageByAsylumAndPT(sqafID, dataDemo, "total", sqafCheck$Explanation)
   
   
-  # Pretty basic success criteria so far - basically that the function successfully adds some rows.
+  #--6-- Pretty basic success criteria so far - basically that the function successfully adds some rows.
   success <- nrow(sqafList) - currentNumRows > 0
   returnValue <- success  
   
@@ -883,7 +904,6 @@ CheckDemographicAccommodationType <- function(sqafID, dataDemo) {
   #--1-- Get the relevant sqaf check
   sqafCheck <- sqafChecks[sqafChecks$ID == sqafID,]
   
-  
   #--2-- This style of test where we want to look for the % of a specific variable value is now encapsulated in this function
   RunCategoricalRuleBasedOnPercentage(sqafID, dataDemo, TRUE, "total", "accommodationType", "U", sqafCheck$Explanation )
   
@@ -900,14 +920,18 @@ CheckDemographicAccommodationType <- function(sqafID, dataDemo) {
 # 1.7
 CheckDemographicUrbanRural <- function(sqafID, dataDemo) {
   
-  # Get the current number of rows outputted...
+  #--0-- Get the current number of rows outputted...
   currentNumRows <- nrow(sqafList)
   
-  # Run the test - essentially this calcs and tests how much of the total urbanRural is V by asylum and PT
-  RunCategoricalRuleBasedOnPercentage(sqafID, dataDemo, TRUE, "total", "urbanRural", "V" )
+  #--1-- Get the relevant sqaf check
+  sqafCheck <- sqafChecks[sqafChecks$ID == sqafID,]
   
   
-  # Pretty basic success criteria so far - basically that the function successfully adds some rows.
+  #--2-- Run the test - essentially this calcs and tests how much of the total urbanRural is V by asylum and PT
+  RunCategoricalRuleBasedOnPercentage(sqafID, dataDemo, TRUE, "total", "urbanRural", "V", sqafCheck$Explanation )
+  
+  
+  #--3-- Pretty basic success criteria so far - basically that the function successfully adds some rows.
   success <- nrow(sqafList) - currentNumRows > 0
   returnValue <- success  
   
