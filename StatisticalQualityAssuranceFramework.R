@@ -229,9 +229,14 @@ gr$PT <- gr$populationType
 gr$origin <- gr$CoO
 gr$asylum <- gr$CoA
 gr$Year <- sqafYear
-dataSummary <- CompareDemographicsAndPopulationTotals(dataDemographics, gr)
 
+CheckDemographicTotals("2.2", dataDemographics, gr, dataREFROC, dataRET, sqafIsASR)
+
+dataSummary <- CompareDemographicsAndPopulationTotals(dataDemographics, gr)
 View(dataSummary)
+
+dataReturns <- CompareRefugeeReturns(dataREFROC, dataRET, isASR )
+View(dataReturns)
 
 unique(gr$populationType)
 unique(dataDemographics$PT)
@@ -260,6 +265,9 @@ unique(dataDemographics$AggregationType)
 
 
 View(dataDemographics)
+
+View(dataPoCs)
+View(dataSolutions)
 
 
 # https://www.markvanderloo.eu/yaRb/2016/03/25/easy-data-validation-with-the-validate-package/

@@ -140,6 +140,26 @@ GenerateThresholdAndMessages <-
 
 
 #-------------------------------------------------------------------------------------------------------------------------
+# Modifies the gr (Global report data) to make it compatible with the format needed for these checks
+PreparePopulationData <-
+  function(gr) {
+    
+    #--1-- Rename some key fields in the gr dataset to support the use of the CompareDemographicsAndPopulationTotals method
+    gr$PT <- gr$populationType
+    gr$origin <- gr$CoO
+    gr$asylum <- gr$CoA
+    gr$Year <- sqafYear # from the global variables
+    
+    # and remove the irrelevant columns
+    gr$CoA <- gr$CoO <- gr$ISO3CoO <- gr$ISO3CoA <- gr$populationType <- NULL
+    
+    # Strip out the IDMC and UNRWA data
+    gr <- gr %>% filter(! PT %in% c("Total", "IDMC", "UNRWA"))
+    
+    returnValue <- gr
+  }
+
+#-------------------------------------------------------------------------------------------------------------------------
 # The rules should be a data frame with the validate structure (name, description and rule)
 # These rules are 0/1 i.e. they either pass or fail
 RunValidationChecks <-
@@ -900,15 +920,8 @@ CheckDemographicTotals <- function(sqafID, dataDemo, gr, dataREFROC, dataRET, is
   currentNumRows <- nrow(sqafList)
 
   #--1-- Rename some key fields in the gr dataset to support the use of the CompareDemographicsAndPopulationTotals method
-  gr$PT <- gr$populationType
-  gr$origin <- gr$CoO
-  gr$asylum <- gr$CoA
-  gr$Year <- sqafYear # from the global variables
+  gr <- PreparePopulationData(gr)
 
-  # and remove the irrelevant columns
-  gr$CoA <- gr$CoO <- gr$ISO3CoO <- gr$ISO3CoA <- gr$populationType <- NULL
-  
-    
   #--2-- Extract the returns - !!IMPORTANT!!
   # For this comparison to be effective, we need the origin returns only, not the fancy maximum calculation.
   # hence we need to strip out the fancy Returns data, and add in our gucci data...
@@ -924,9 +937,8 @@ CheckDemographicTotals <- function(sqafID, dataDemo, gr, dataREFROC, dataRET, is
   # clear out all the redundant columns  
   dataReturns$populationType <- dataReturns$RETPopulation <- dataReturns$RETAssisted <- NULL
   
-#############  
-View(dataReturns)
-View(gr)
+#View(dataReturns)
+#View(gr)
   
   # Strip out the returns
   gr <- gr %>% filter(PT != "RET")
@@ -1521,13 +1533,8 @@ CheckCountryCodes <- function(sqafID, gr) {
   # Get the current number of rows outputted...
   currentNumRows <- nrow(sqafList)
   
-  # Standardise the column names
-  gr$PT <- gr$populationType  
-  gr$origin <- gr$CoO
-  gr$asylum <- gr$CoA
-  
-  # Strip out the IDMC and UNRWA data
-  gr <- gr %>% filter(! populationType %in% c("Total", "IDMC", "UNRWA"))
+  # Standardise the column names and strip out the IDMC and UNRWA data
+  gr <- PreparePopulationData(gr)
   
   
   # get the source data with the definitive list of country codes
