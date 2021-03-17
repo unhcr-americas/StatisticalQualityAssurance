@@ -119,7 +119,7 @@ for( i in 1: nrow(sqafChecks)) {
     argStr <- "dataREFROC, dataRET, sqafIsASR"
     
   } else if (sqafChecks$Data[i] == "DemoPoCs") {
-    argStr <- "dataDemographics, dataPopulation"
+    argStr <- "dataDemographics, gr, dataREFROC, dataRET, sqafIsASR"
 
   } else if (sqafChecks$Data[i] == "Stateless") {
     argStr <- "dataSTAUDN, sqafIsASR"
@@ -213,6 +213,7 @@ View(sqafChecks)
 View(dataDemographics)
 
 View(dataSTAUDN)
+View(dataPopulation)
 
 View(dataRSDFull)
 
@@ -223,6 +224,19 @@ View(dataPoCs)
 
 View(dataHST)
 
+## TEST ##
+gr$PT <- gr$populationType
+gr$origin <- gr$CoO
+gr$asylum <- gr$CoA
+gr$Year <- sqafYear
+dataSummary <- CompareDemographicsAndPopulationTotals(dataDemographics, gr)
+
+View(dataSummary)
+
+unique(gr$populationType)
+unique(dataDemographics$PT)
+sum(dataDemographics$total[dataDemographics$PT == "RET" & dataDemographics$origin == "AFG"])
+sum(gr$TotalPopulation[gr$populationType == "RET" & gr$origin == "AFG"])
 
 sqafList$Notes[sqafList$ID == "6.1" & sqafList$Severity >= 2 ]
 

@@ -3,7 +3,7 @@
 #-------------------------------------------------------------------------------------------------------------------------
 # Helper function to support the Statistics Quality Assurance Framework
 
-# Version: January 2021 - v0.1
+# Version: January 2021 - v0.4
 # Authors: Edgar Scrase
 
 # Copyright © 2021 UNHCR Global Data Service, Statistics and Demographics Section
@@ -30,9 +30,6 @@ sqafList <-
     
     Notes = character(),
     
-    # THe action is redundant and should be included only in the metadata
-    #ActionDescription = character(),
-    
     Result = integer(),
     Severity=integer(),    
     
@@ -47,14 +44,12 @@ sqafList <-
 #-------------------------------------------------------------------------------------------------------------------------
 # Append an item to the global SQAF list
 AppendSQAFItem <- 
-  function(sqafID, msgCheck, #msgAction, 
-           perc, threshold, year, populationType, origin, asylum  ) {
+  function(sqafID, msgCheck, perc, threshold, year, populationType, origin, asylum  ) {
     
     #--1-- check for NULLs and reassign as NA
     sqafID <- ifelse(IsNull(sqafID), NA, sqafID)
     msgCheck <- ifelse(IsNull(msgCheck), NA, msgCheck)
-#    msgAction <- ifelse(IsNull(msgAction), NA, msgAction)
-    
+
     populationType <- ifelse(IsNull(populationType), NA, populationType)
     origin <- ifelse(IsNull(origin), NA, origin)
     asylum <- ifelse(IsNull(asylum), NA, asylum)
@@ -65,7 +60,6 @@ AppendSQAFItem <-
       
       c(as.character(sqafID), # ID
         as.character(msgCheck), # Additional Notes
-#        as.character(msgAction), # Action message
         perc, # Percentage result
         threshold, # Severity
         year, # Year
@@ -82,10 +76,7 @@ AppendSQAFItem <-
 
 #-------------------------------------------------------------------------------------------------------------------------
 # Generate the threshold and messages
-# The stubAction is the generic action message to present. e.g. 
-# Try to extend the coverage of the available demographic data through new data sources, statistical modelling or estimation.
 GenerateThresholdAndMessages <-
-  #function(sqafID, origin, asylum, populationType, stubAction, perc, additionalMessage = "") {
   function(sqafID, origin, asylum, populationType, perc, additionalMessage = "") {
 
     # Get the relevant sqaf check
@@ -93,72 +84,17 @@ GenerateThresholdAndMessages <-
         
     # 15-March-2021 - do not build this message as it is essentially redundant.  Just include the description of the check...
     # And the additional message (if present)
-    #msgCheck <- paste0(sqafCheck$Description, ".")
     msgCheck <- NA
     
     if(! is.na(additionalMessage) & length(additionalMessage) > 0 & additionalMessage != "") {
-      #msgCheck <- paste0(msgCheck, "  ", additionalMessage, ".")
-      #msgCheck <- paste0(msgCheck, additionalMessage, ".")
       msgCheck <- paste0(additionalMessage, ".")
     }
     
-    
-#    msgCheck <- paste0("The check '", sqafChecks$Description[sqafChecks$ID == sqafID], "'")
-    
-    
-    # Build the message describing the check, including the applicable parameters (PT, asylum and origin) e.g.
-    # "The check 'My check' for country of asylum ASY and population type PT achieved 12%.
-#    numParams <- sum(!is.null(origin), !is.null(asylum), !is.null(populationType))
-    
-    # If we have some parameters to present, lets start the half sentence
-#    if( numParams >= 1) {
-#      msgCheck <- paste0(msgCheck, " for ")  
-#    }
-    # Now build the list of params
-#    paramString <- ""
-    
-    # Origin
-#    if( ! IsNNN(origin)) {
-#      paramString <- paste0("country of origin ", origin )
-#    }
-    
-    # Asylum
-#    if( ! IsNNN(asylum)) {
-#      # Add a comma if there are more than 2 params, otherwise and if there are exactly 2
-#      if( length(paramString) > 0) {
-#        if ( numParams == 2 ) {
-#          paramString <- paste0(paramString, " and " )
-#        } else if ( numParams == 3 ) {
-#          paramString <- paste0(paramString, ", " )
-#        }
-#      }      
-#      
-#      paramString <- paste0(paramString, "country of asylum ", asylum )
-#    }
-
-#    # Population type
-#    if( ! IsNNN(populationType)) {
-#      # Add an and as this is the last parameter, as long as there are more than one parameter
-#      if( length(paramString) > 0) {
-#        if ( numParams > 1 ) {
-#          paramString <- paste0(paramString, " and " )
-#        }
-#      }
-#      
-#      paramString <- paste0(paramString, "population type ", populationType )
-#    }
-#    
-#    # And then add the %
-#    msgCheck <- paste0(msgCheck, paramString, " achieved ", round(perc), "%  ", additionalMessage, "." )
-        
-
-
+  
     # See where the result lies
+    # 1: Looking good; 2: Could improve; 3: Should improve; 4: Must improve;
     threshold <- 0
-#    msg1 <- "Looking good: "
-#    msg2 <- "Could improve: "
-#    msg3 <- "Should improve: "
-#    msg4 <- "Must improve: "
+
     
     if( sqafCheck$Quality_Scale == "HighToLow" ) {
       
@@ -166,21 +102,17 @@ GenerateThresholdAndMessages <-
       # With the last category the choice is the threshold being null OR the value being less than the threshold
       if (! IsNNN(sqafCheck$Threshold_4) & perc <= sqafCheck$Threshold_4) {
         threshold <- 4  
-#        msgCheck <- paste0(msg4, msgCheck)
-        
+
       } else if (! IsNNN(sqafCheck$Threshold_3) &  perc <= sqafCheck$Threshold_3) {
         threshold <- 3
-#        msgCheck <- paste0(msg3, msgCheck)
-        
+
       } else if (! IsNNN(sqafCheck$Threshold_2) &  perc <= sqafCheck$Threshold_2) {
         threshold <- 2
-#        msgCheck <- paste0(msg2, msgCheck)
-        
+
       } else if ( IsNNN(sqafCheck$Threshold_1) | perc <= sqafCheck$Threshold_1) {
         threshold <- 1
-#        msgCheck <- paste0(msg1, msgCheck)
-        
-        # What about silly %'s > 100?
+
+        # What about silly %'s > 100? Can handle by leaving the top level empty in the spreadsheet
       }        
       
     } else if ( sqafCheck$Quality_Scale == "LowToHigh" ) {
@@ -188,31 +120,21 @@ GenerateThresholdAndMessages <-
       
       if (! IsNNN(sqafCheck$Threshold_4) & perc >= sqafCheck$Threshold_4) {
         threshold <- 4  
-#        msgCheck <- paste0(msg4, msgCheck)
-        
+
       } else if (! IsNNN(sqafCheck$Threshold_3) &  perc >= sqafCheck$Threshold_3) {
         threshold <- 3
-#        msgCheck <- paste0(msg3, msgCheck)
-        
+
       } else if (! IsNNN(sqafCheck$Threshold_2) &  perc >= sqafCheck$Threshold_2) {
         threshold <- 2
-#        msgCheck <- paste0(msg2, msgCheck)
-        
+
       } else if ( IsNNN(sqafCheck$Threshold_1) | perc >= sqafCheck$Threshold_1) {
         threshold <- 1
-#        msgCheck <- paste0(msg1, msgCheck)
       }
       
     }
     
-    # Tweak the action if the threshold achieved was 1
-#    if( threshold == 1) {
-#      msgAction <- "No action required."      
-#    }
-    
-    
+
     # Then we want to return the threshold, msgCheck and msgAction
-#    returnValue <- list("threshold" = threshold, "msgCheck" = msgCheck, "msgAction" = msgAction)
     returnValue <- list("threshold" = threshold, "msgCheck" = msgCheck)
   }
 
@@ -233,7 +155,6 @@ RunValidationChecks <-
       if(nrow(data) > 0) {
         
         #--1-- Then test the data using the validate framework
-        #        out <- confront(dataSubSet, validator( ruleListRow$rule))
         dodgyList <- violating(data, validator(.data = ruleListRow))
         
         print(paste("Found ", nrow(dodgyList), "records violating the test"))
@@ -257,7 +178,6 @@ RunValidationChecks <-
               coo, 
               coa,
               popType,
-  #            stubAction, 
               0,
               ruleListRow$description # Include the description here which is useful especially when there are multiple issues
               #""
@@ -360,9 +280,7 @@ RunCategoricalRuleBasedOnPercentage <- function(sqafID, data, doGroupByPT, count
   
   #--2a-- Calculate the total by asylum, PT and urbanRural/accommodation type etc...
   dataSummary <- data %>% 
-    #group_by(across(all_of(c("asylum", "PT", filterColName)))) %>%
     group_by(across(all_of(listToGroupByExtended))) %>%
-#    group_by(asylum, PT, !! as.name(filterColName)) %>%
     summarise(        
       Enumerator = sum(!! as.name(countColName))
     )
@@ -370,13 +288,10 @@ RunCategoricalRuleBasedOnPercentage <- function(sqafID, data, doGroupByPT, count
 #View(dataSummary)  
   
   #--2b-- Calculate the total by asylum, PT
-#  dataSummary2a <- dataSummary %>%
-    dataSummary2a <- data %>% 
-#    group_by(asylum, PT) %>%
+  dataSummary2a <- data %>% 
     group_by(across(all_of(listToGroupBy))) %>%
     summarise(        
       Total = sum(!! as.name(countColName))
-      #Total = sum(Enumerator)
     )
   
 #View(dataSummary2a)
@@ -396,21 +311,7 @@ RunCategoricalRuleBasedOnPercentage <- function(sqafID, data, doGroupByPT, count
   
   #--2d-- Then summarise by asylum and PT and calculate the % for each where the urbanRural is V, accommodationType == U etc
   # then group by asylum and join to a filtered version with just STA
-  dataSummary3 <- left_join(
-    dataSummary2a,
-    dataSummary2b, 
-#    dataSummary %>% 
-      #filter(!! as.name(filterColName) == as.character(filterValue)) %>%
-#      filter(!! as.name(filterColName) == filterValue) %>%
-      #filter(!! as.name(filterColName) == !!!rlang::parse_exprs(filterValue)) %>%
-      
-      #filter(!!!rlang::parse_exprs(filterExpression)) %>% 
-#      select(asylum, PT, Enumerator),
-    #by=c("asylum"="asylum", "PT"="PT")
-    by=listToJoinBy
-    
-  )
-  
+  dataSummary3 <- left_join( dataSummary2a, dataSummary2b, by=listToJoinBy)
   
   #--2e-- Remove the na's and produce the percentage
   dataSummary3[is.na(dataSummary3)] <- 0
@@ -646,7 +547,7 @@ CheckDemographicCoverage <-
 
 
 #-------------------------------------------------------------------------------------------------------------------------
-# 1.3 returns true if the process ran successfully
+# 1.3  So the logical test here is that a given CoA has more than a given number of sub-locations
 CheckSubNationalCoverage <-
   function(sqafID, demoData) {
     
@@ -656,16 +557,12 @@ CheckSubNationalCoverage <-
     #--1-- Get the relevant sqaf check
     sqafCheck <- sqafChecks[sqafChecks$ID == sqafID,]
     
-    
-    # So the logical test here is that a given CoA has more than one location
-    # Too simple right???  
-    
+
     # Filter out the rows with zero as total - these are not relevant to this check
     demoData <- demoData %>% filter(total > 0)
     
     
     # Summarise the demographics to only include the location and the country of asylum (and of course the population type)
-    #demoData <- SummariseDemographics(demoData, FALSE, FALSE, TRUE, TRUE, FALSE, FALSE, FALSE)
     demoData <- SummariseDemographics(demoData, TRUE, FALSE, TRUE, TRUE, FALSE, FALSE, FALSE)
     
     
@@ -674,8 +571,6 @@ CheckSubNationalCoverage <-
     dataSummary <- demoData %>% 
       group_by(asylum, location) %>%
       summarise(
-        #Age_Sex = sum(Age_Sex),
-        #Sex = sum(Sex),
         Total = sum(Total)
       )
     #View(dataSummary)    
@@ -683,8 +578,6 @@ CheckSubNationalCoverage <-
     dataSummary <- dataSummary %>% 
       group_by(asylum) %>%
       summarise(
-        #Age_Sex = sum(Age_Sex),
-        #Sex = sum(Sex),
         NumLocations = n()
       )
     
@@ -697,7 +590,6 @@ CheckSubNationalCoverage <-
         NULL, 
         dataSummary$asylum[i],
         NULL,
-#        stubAction, 
         dataSummary$NumLocations[i]
       )
       
@@ -749,9 +641,6 @@ CheckDemographicAggregationType <-
       description = "Empty or invalid aggregation type", 
       rule = paste0("AggregationType != '' & AggregationType %in% c(\"",
                     paste(validAggregationTypes, collapse="\",\"", sep=""), "\")")
-      
-#      rule = paste0("AggregationType == '' | ! AggregationType %in% c(\"",
-#                    paste(validAggregationTypes, collapse="\",\"", sep=""), "\")")
       
     )
     
@@ -830,8 +719,6 @@ CheckDemographicAggregationType <-
              "
     )
     ruleList <- rbind(ruleList, r4)
-    
-    #    View(ruleList[1,])        
     
     # Now iterate through the rules and filter the data, then confront only the filtered data
     for( i in 1 : nrow(ruleList)) {
@@ -956,10 +843,7 @@ CheckRefugeeReturns <-
     dataReturns$Perc[is.infinite(dataReturns$Perc)] <- 1000000
 
 #View(dataReturns)    
-    
-#    stubAction <- "Review together the differences in the number of returns recorded by the country of origin and the country(ies) of asylum.
-#    Small differences are completely acceptable, but large differences should be rare."
-        
+
     #--2-- Loop through them and identify any we need to record as messages
     numViolating <- 0
     
@@ -978,14 +862,13 @@ CheckRefugeeReturns <-
         dataReturns$origin[i], 
         dataReturns$asylum[i],
         pt,
-#        stubAction, 
         dataReturns$Perc[i],
         additionalMessage
       )
       
       
       # Assign the new info to the global list
-      AppendSQAFItem(sqafID, output$msgCheck, #output$msgAction, 
+      AppendSQAFItem(sqafID, output$msgCheck,
                      dataReturns$Perc[i], output$threshold, 
                      sqafYear, pt, dataReturns$origin[i], dataReturns$asylum[i])
 
@@ -1011,19 +894,101 @@ CheckRefugeeReturns <-
 
 #-------------------------------------------------------------------------------------------------------------------------
 # 2.2
-CheckDemographicTotals <- function(sqafID, dataDemo, dataPopulation) {
+CheckDemographicTotals <- function(sqafID, dataDemo, gr, dataREFROC, dataRET, isASR) {
   
-  # Get the current number of rows outputted...
+  #--0-- Get the current number of rows outputted...
   currentNumRows <- nrow(sqafList)
+
+  #--1-- Rename some key fields in the gr dataset to support the use of the CompareDemographicsAndPopulationTotals method
+  gr$PT <- gr$populationType
+  gr$origin <- gr$CoO
+  gr$asylum <- gr$CoA
+  gr$Year <- sqafYear # from the global variables
+
+  # and remove the irrelevant columns
+  gr$CoA <- gr$CoO <- gr$ISO3CoO <- gr$ISO3CoA <- gr$populationType <- NULL
   
-  # How do we do this ? Full join?  PT by PT?
+    
+  #--2-- Extract the returns - !!IMPORTANT!!
+  # For this comparison to be effective, we need the origin returns only, not the fancy maximum calculation.
+  # hence we need to strip out the fancy Returns data, and add in our gucci data...
+  dataReturns <- CompareRefugeeReturns(dataREFROC, dataRET, isASR )
   
-  print("!!! NOT YET IMPLEMENTED !!!")
+  # Then simplify the dataReturns and merge it with the gr data
+  dataReturns <- dataReturns %>% select(origin, asylum, populationType, RETPopulation, RETAssisted, IsDuplicate)
+  dataReturns$PT <- "RET" # always RET!! dataReturns$populationType
+  dataReturns$Year <- sqafYear
+  dataReturns$TotalPopulation <- dataReturns$RETPopulation
+  dataReturns$TotalAssisted <- dataReturns$RETAssisted
   
-  # Pretty basic success criteria so far - basically that the function successfully adds some rows.
-  #success <- nrow(sqafList) - currentNumRows > 0
-  #returnValue <- success  
-  returnValue <- TRUE
+  # clear out all the redundant columns  
+  dataReturns$populationType <- dataReturns$RETPopulation <- dataReturns$RETAssisted <- NULL
+  
+#############  
+View(dataReturns)
+View(gr)
+  
+  # Strip out the returns
+  gr <- gr %>% filter(PT != "RET")
+  # then add the original ones back in
+  gr <- rbind(gr, dataReturns)
+  
+  
+  #--3-- Use the comparison function to produce a data summary comparing the two
+  dataSummary <- CompareDemographicsAndPopulationTotals(dataDemographics, gr)
+  
+  
+  #--3-- Go through the data summary and flag all non-zero differences as errors...
+  # for reference the column Total is from the demographic data; TotalPopulation is from the gr data
+  
+  numViolating <- 0
+  
+  for( i in 1 : nrow(dataSummary)) {
+    
+    row <- dataSummary[i,]
+    
+    #--3a-- If the row is non-zero, we have an issue
+    if (row$Diff != 0) {
+      
+      #--3b-- Generate the additional message
+      additionalMessage <- paste0("Comparison: ", 
+                                  PrettyNum(row$Total), 
+                                  " in the demographic table versus ", 
+                                  PrettyNum(row$TotalPopulation), 
+                                  " in the population data table, i.e. a difference of ", 
+                                  PrettyNum(row$Diff))
+      
+      #--3c-- We need to absolutify the diff so that the error messages are generated correctly
+      output <- GenerateThresholdAndMessages(
+        sqafID,
+        row$origin, 
+        row$asylum,
+        row$PT,
+        abs(row$Diff),
+        additionalMessage
+      )
+      
+      
+      #--3d-- Assign the new info to the global list
+      AppendSQAFItem(sqafID, output$msgCheck,
+                     row$Diff, output$threshold, 
+                     sqafYear, row$PT, row$origin, row$asylum)
+      
+      
+      if (output$threshold >= 2) {
+        numViolating <- numViolating + 1
+      }      
+    }
+    
+  }
+  
+  
+  print(paste0("Found ", numViolating, " rows of data (by asylum, origin and population type) violating the test"))  
+  
+
+  #--4-- Pretty basic success criteria so far - basically that the function successfully adds some rows.
+  success <- nrow(sqafList) - currentNumRows > 0
+  returnValue <- success  
   
 }
 
@@ -1057,11 +1022,8 @@ CheckRefugeeBasis <- function(sqafID, dataREF, isASR) {
   if ( isASR == FALSE) {
     print( "Skipping this check as this data is only available in the annual statistics." )
   } else {
-    ##################################################################
-    # Source should be one of U, G, V, N (should not be blank)
+
     # Basis should be one of R, V, E, C (should not be blank and estimates less desirable)
-    
-    # Detailed
     ruleList <- data.frame( 
       name = "Estimated basis for refugee data",
       description = "Avoid estimates if possible for the refugee data", 
