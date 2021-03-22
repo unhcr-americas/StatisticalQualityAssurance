@@ -159,11 +159,50 @@ PreparePopulationData <-
     returnValue <- gr
   }
 
+
+#-------------------------------------------------------------------------------------------------------------------------
+# Cleans up the sqaf output to use integers for the years, results and severity, and also converts the country codes
+# and population types to use the lookups included in the refugee-statistics and popdata systems
+StandardiseSQAFList <-
+  function( sqafList) {
+    
+    # Standardise the country names to used IDs which are compatible with the system
+    countriesHEXIS <- LoadCountryListFromRefugeeStatistics()
+    countriesHEXIS <- countriesHEXIS %>% select(id, code)
+    countriesHEXIS$AsylumID <- countriesHEXIS$OriginID <- countriesHEXIS$id
+    
+    b4 <-nrow(sqafList)
+    
+    sqafList <- left_join(sqafList, countriesHEXIS %>% select(OriginID, code), by=c("Origin"="code"))
+    sqafList <- left_join(sqafList, countriesHEXIS %>% select(AsylumID, code), by=c("Asylum"="code"))
+    
+    after <- nrow(sqafList)
+    
+    if(b4 == after) {
+      print(paste0("Good news - no duplicates added when joining the sqaf list with the country codes; the total number of entries remains: ", after))
+    } else {
+      print(paste0("WARNING: Duplicates added by the join between the sqaf list and the origin / asylum.  Before: ", b4, " and after: ", after, "."))
+    }
+    
+    print(paste0("Origin codes that have no ID", unique(sqafList$Origin[!is.na(sqafList$Origin) & is.na(sqafList$OriginID)]), collapse=", "))
+    print(paste0("Asylum codes that have no ID", unique(sqafList$Asylum[!is.na(sqafList$Asylum) & is.na(sqafList$AsylumID)]), collapse=", "))  
+
+        
+    # Ensure that the result, severity and year are all integers
+    sqafList$Year <- as.integer(sqafList$Year)
+    sqafList$Result <- as.integer(sqafList$Result)
+    sqafList$Severity <- as.integer(sqafList$Severity)
+    
+    View(sqafList)
+        
+    returnValue <- sqafList
+  }
+
 #-------------------------------------------------------------------------------------------------------------------------
 # The rules should be a data frame with the validate structure (name, description and rule)
 # These rules are 0/1 i.e. they either pass or fail
 RunValidationChecks <-
-  function(sqafID, data, rules) {
+  function(sqafID, data, rules, includeOriginInMessage=FALSE) {
     
     #--0-- Iterate through the rules and run each on the given dataset
     for( i in 1 : nrow(rules)) {
@@ -193,13 +232,22 @@ RunValidationChecks <-
             coa <- ifelse( coaExists, dodgyList$asylum[j], NA)
             popType <- ifelse( popTypeExists, dodgyList$PT[j], NA)
             
+            # Include the description here which is useful especially when there are multiple issues
+            desc <- ruleListRow$description
+            
+            # Add the additional message if it exists - we need the origin to be there if the origin is invalid as it wont then
+            # appear in the IDs.
+            if(includeOriginInMessage == TRUE){
+              desc <- paste0( desc, " (Origin: ", coo, ")" )
+            }
+            
             output <- GenerateThresholdAndMessages(
               sqafID,
               coo, 
               coa,
               popType,
               0,
-              ruleListRow$description # Include the description here which is useful especially when there are multiple issues
+              desc # Include the description here which is useful especially when there are multiple issues
               #""
             )
             
@@ -869,11 +917,12 @@ CheckRefugeeReturns <-
     
     for( i in 1 : nrow(dataReturns)) {
       
-      additionalMessage <- paste0("Comparison: ", 
+      additionalMessage <- paste0("Comparison: ",
+                                  dataReturns$populationType[i], " returns total ",
                                   PrettyNum(dataReturns$RETPopulation[i]), 
-                                  " by country of origin versus ", 
+                                  " by country of origin (", dataReturns$origin[i],") versus ", 
                                   PrettyNum(dataReturns$REFROCPopulation[i]), 
-                                  " by country of asylum, i.e. a difference of ", 
+                                  " by country of asylum (", dataReturns$asylum[i], "), i.e. a difference of ", 
                                   PrettyNum(dataReturns$Diff[i])
                                   )
       
@@ -887,12 +936,18 @@ CheckRefugeeReturns <-
       )
       
       
-      # Assign the new info to the global list
+      # Assign two versions of the new info to the global list - so that it is visible to both countries of origin and asylum
+      # Typical submission by country of former asylum
       AppendSQAFItem(sqafID, output$msgCheck,
                      dataReturns$Perc[i], output$threshold, 
                      sqafYear, pt, dataReturns$origin[i], dataReturns$asylum[i])
 
+      # And by country of origin
+      AppendSQAFItem(sqafID, output$msgCheck,
+                     dataReturns$Perc[i], output$threshold, 
+                     sqafYear, pt, dataReturns$origin[i], dataReturns$origin[i])
       
+      # Log the numbers
       if (output$threshold >= 2) {
         numViolating <- numViolating + 1
       }
@@ -1397,6 +1452,22 @@ CheckSignificantChange <- function(sqafID, dataLatest, dataHistoric) {
   
 }
 
+#-------------------------------------------------------------------------------------------------------------------------
+# 8.2
+CheckStartEndChange <- function(sqafID, dataLatest, dataHistoric) {
+  
+  # Get the current number of rows outputted...
+  currentNumRows <- nrow(sqafList)
+  
+  print("!!! NOT YET IMPLEMENTED !!!")
+  
+  # Pretty basic success criteria so far - basically that the function successfully adds some rows.
+  #success <- nrow(sqafList) - currentNumRows > 0
+  #returnValue <- success  
+  returnValue <- TRUE
+  
+}
+
 
 
 #-------------------------------------------------------------------------------------------------------------------------
@@ -1500,19 +1571,23 @@ CheckGeneralDispacedOriginAsylum <- function(sqafID, dataPopulation) {
     
 
 #-------------------------------------------------------------------------------------------------------------------------
-# 9.3 VDA should no longer be included in the OOC table
-CheckVDAInOOC <- function(sqafID, dataOOC) {
+# 9.3 and 9.4 VDA should no longer be included in the OOC table
+CheckVDAInOOCBase <- function(sqafID, dataOOC) {
   
-  # Get the current number of rows outputted...
+  #--0-- Get the current number of rows outputted...
   currentNumRows <- nrow(sqafList)
+
+  #--1-- Get the relevant sqaf check
+  sqafCheck <- sqafChecks[sqafChecks$ID == sqafID,]
   
-  # Standardise the column names
+  #--2-- Standardise the column names
   dataOOC$PT <- dataOOC$populationType  
+
   
-  # Add the rule
+  #--3-- Add the rule
   ruleList <- data.frame( 
-    name = "VEN internationally displaced should now be recorded in the VDA table",
-    description = "Previously, the Venezuelans Displaced Abroad were recorded in the OOC table.  Now, VEN internationally forcibly displaced should now be recorded in the VDA table.", 
+    name = sqafCheck$Description,
+    description = sqafCheck$Explanation, 
     rule = paste0("origin != 'VEN' | (origin == 'VEN' & asylum == 'VEN')")
     
   )
@@ -1522,12 +1597,78 @@ CheckVDAInOOC <- function(sqafID, dataOOC) {
   # Pretty basic success criteria so far - basically that the function successfully adds some rows.
   success <- nrow(sqafList) - currentNumRows > 0
   returnValue <- success  
+  
+}
+
+#-------------------------------------------------------------------------------------------------------------------------
+# 9.3 VDA should no longer be included in the OOC table
+CheckVDAInOOCAmericas <- function(sqafID, dataOOC) {
+  
+  #--1-- Link the data to the UNSD Regions and filter it to just Americas
+  dataOOC <- left_join(dataOOC, t22 %>% select(UNHCR_Country_Code, UNSD_Region_Name), by=c("asylum"="UNHCR_Country_Code"))
+  dataOOC <- dataOOC %>% filter(UNSD_Region_Name == "Americas")
+  
+  #--2-- Run the checks
+  returnValue <- CheckVDAInOOCBase(sqafID, dataOOC)  
 
 }
 
 
 #-------------------------------------------------------------------------------------------------------------------------
-# 9.4 Checks that all the country codes in the origin and asylum in gr are valid
+# 9.4
+CheckVDAinOOCGlobal <- function(sqafID, dataOOC) {
+  
+  #--1-- Link the data to the UNSD Regions and filter it to just Americas
+  dataOOC <- left_join(dataOOC, t22 %>% select(UNHCR_Country_Code, UNSD_Region_Name), by=c("asylum"="UNHCR_Country_Code"))
+  dataOOC <- dataOOC %>% filter(UNSD_Region_Name != "Americas")
+  
+  #--2-- Run the checks
+  returnValue <- CheckVDAInOOCBase(sqafID, dataOOC)  
+  
+}
+
+
+
+#-------------------------------------------------------------------------------------------------------------------------
+# 9.5 - Checks that the VDA category is only used in the Americas
+CheckVDAGlobal <- function(sqafID, dataVDA) {
+  
+  #--0-- Get the current number of rows outputted...
+  currentNumRows <- nrow(sqafList)
+  
+  #--1-- Get the relevant sqaf check
+  sqafCheck <- sqafChecks[sqafChecks$ID == sqafID,]
+  
+  #--2-- Standardise the column names
+  dataVDA$PT <- dataVDA$populationType  
+  
+  #--3-- Link the data to the UNSD Regions and filter it to just Americas
+  dataVDA <- left_join(dataVDA, t22 %>% select(UNHCR_Country_Code, UNSD_Region_Name), by=c("asylum"="UNHCR_Country_Code"))
+
+  #View(dataVDA)
+  
+  #--4-- Add the rule
+  ruleList <- data.frame( 
+    name = sqafCheck$Description,
+    description = sqafCheck$Explanation, 
+    rule = paste0("UNSD_Region_Name == 'Americas'")
+    
+  )
+  
+  #--5-- Run the rule
+  RunValidationChecks(sqafID, dataVDA, ruleList)  
+  
+  #--6-- Pretty basic success criteria so far - basically that the function successfully adds some rows.
+  success <- nrow(sqafList) - currentNumRows > 0
+  returnValue <- success    
+  
+}
+
+
+
+
+#-------------------------------------------------------------------------------------------------------------------------
+# 9.6 Checks that all the country codes in the origin and asylum in gr are valid
 CheckCountryCodes <- function(sqafID, gr) {
   
   # Get the current number of rows outputted...
@@ -1561,7 +1702,7 @@ CheckCountryCodes <- function(sqafID, gr) {
   
   
   # Then run the checks...
-  RunValidationChecks(sqafID, gr, ruleList)  
+  RunValidationChecks(sqafID, gr, ruleList, TRUE)  
   
   # Pretty basic success criteria so far - basically that the function successfully adds some rows.
   success <- nrow(sqafList) - currentNumRows > 0

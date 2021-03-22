@@ -141,6 +141,10 @@ for( i in 1: nrow(sqafChecks)) {
     
     argStr <- "dataOOC"
 
+  } else if (sqafChecks$Data[i] == "VDA") {    
+    
+    argStr <- "dataVDA"    
+    
   } else if (sqafChecks$Data[i] == "InternationallyForciblyDisplaced") {
     argStr <- "gr"
     
@@ -170,10 +174,18 @@ for( i in 1: nrow(sqafChecks)) {
 #-------------------------------------------------------------------------------------------------------------------------
 # Export the SQAF list as JSON
 
+# Standardise the country names to used IDs which are compatible with the system
 # Ensure that the result, severity and year are all integers
-sqafList$Year <- as.integer(sqafList$Year)
-sqafList$Result <- as.integer(sqafList$Result)
-sqafList$Severity <- as.integer(sqafList$Severity)
+sqafList <- StandardiseSQAFList(sqafList)
+
+#countriesHEXIS <- LoadCountryListFromRefugeeStatistics()
+#View(countriesHEXIS)
+#sqafList <- left_join(sqafList, countriesHEXIS %>% select, by=c("origin"="code"))
+
+
+#sqafList$Year <- as.integer(sqafList$Year)
+#sqafList$Result <- as.integer(sqafList$Result)
+#sqafList$Severity <- as.integer(sqafList$Severity)
 
 
 # Note that even with these na and nulls specified, if a field is NA it is simply not included in the data
@@ -205,6 +217,7 @@ write( toJSON(
 #-------------------------------------------------------------------------------------------------------------------------
 # Testing .............................
 
+
 paste0(c("Test", sqafChecks$ID), collapse= ", ")
 
 View(sqafList)
@@ -215,7 +228,10 @@ View(dataDemographics)
 View(dataSTAUDN)
 View(dataPopulation)
 
+View(dataReturns)
+
 View(dataRSDFull)
+View(dataVDA)
 
 glimpse(sqafList)
 View(dataSTAUDN)
@@ -315,5 +331,25 @@ dodgyList <- violating(gr, validator(.data = ruleList))
 View(dodgyList)
 
 
+totalIDPs <- dataIDP %>% select(origin, totalStartYear, totalMidYear) %>% 
+  group_by (origin) %>%
+  summarise(
+    Start = sum(totalStartYear),
+    End = sum(totalMidYear)
+  )
+View(totalIDPs)
 
+newIDPs <- dataIDP %>% select(origin, increasesNew, increasesOther) %>% 
+  group_by (origin) %>%
+  summarise(
+    increasesNew = sum(increasesNew),
+    increasesOther = sum(increasesOther)
+  )
+newIDPs$Increases <- newIDPs$increasesNew + newIDPs$increasesOther
+sum(newIDPs$Increases)
+sum(dataIDP$decreasesReturned)
+sum(dataIDP$decreasesOther)
+sum(dataIDP$totalMidYear)
+
+View(newIDPs)
 
