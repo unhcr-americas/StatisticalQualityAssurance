@@ -40,6 +40,22 @@ sqafList <-
     stringsAsFactors=FALSE # This negates the use of factors so that the character based columns can contain anything
   )
 
+# And this contains a summary of the data points for each check
+sqafDataPoints <-
+  data.frame(
+    ID = character(), # e.g. the SQAF ID 1.2.3
+    
+    Asylum = character(),    
+
+    Total = integer(),
+    Threshold_1 = integer(),
+    Threshold_2 = integer(),
+    Threshold_3 = integer(),
+    Threshold_4 = integer(),
+    
+    stringsAsFactors=FALSE # This negates the use of factors so that the character based columns can contain anything
+  )
+
 
 #-------------------------------------------------------------------------------------------------------------------------
 # Append an item to the global SQAF list
@@ -204,7 +220,11 @@ StandardiseSQAFList <-
 RunValidationChecks <-
   function(sqafID, data, rules, includeOriginInMessage=FALSE) {
     
-    #--0-- Iterate through the rules and run each on the given dataset
+    
+    #--0-- Append the data point summaries
+    AppendDataPointRows(sqafID, data, nrow(rules))
+    
+    # Iterate through the rules and run each on the given dataset
     for( i in 1 : nrow(rules)) {
       
       ruleListRow <- rules[i,]
@@ -258,6 +278,9 @@ RunValidationChecks <-
                            0, output$threshold, 
                            sqafYear, popType, coo, coa)
             
+            # And update the number of data points
+            UpdateDataPointRow(sqafID, coa, output$threshold, 1)
+            
           }
         }
         
@@ -291,9 +314,13 @@ RunRuleBasedOnPercentageByAsylumAndPT <- function(sqafID, data, countColName, ad
   )
   
   
+  #--2-- Append the data point summaries
+  AppendDataPointRows(sqafID, dataSummary, 1)
+  
+  
   numViolating = 0
   
-  #--2-- Iterate through the data summary and generate the output  
+  #--3-- Iterate through the data summary and generate the output  
   for( i in 1 : nrow(dataSummary)) {
     
     output <- GenerateThresholdAndMessages(
@@ -313,6 +340,10 @@ RunRuleBasedOnPercentageByAsylumAndPT <- function(sqafID, data, countColName, ad
     AppendSQAFItem(sqafID, output$msgCheck, 
                    dataSummary$Perc[i], output$threshold, 
                    sqafYear, dataSummary$PT[i], NA, dataSummary$asylum[i])
+    
+    
+    # And update the number of data points
+    UpdateDataPointRow(sqafID, dataSummary$asylum[i], output$threshold, 1)
     
     
     if (output$threshold >= 2) {
@@ -388,9 +419,13 @@ RunCategoricalRuleBasedOnPercentage <- function(sqafID, data, doGroupByPT, count
 #View(dataSummary3)  
   
   
+  #--3-- Append the data point summaries
+  AppendDataPointRows(sqafID, dataSummary3, 1)
+  
+  
   numViolating = 0
   
-  # Iterate through the data summary and generate the output
+  #--4-- Iterate through the data summary and generate the output
   for( i in 1 : nrow(dataSummary3)) {
     
     # Quick switch to ensure the pt is OK (it should no be present if we are not grouping by it)
@@ -419,6 +454,9 @@ RunCategoricalRuleBasedOnPercentage <- function(sqafID, data, doGroupByPT, count
     AppendSQAFItem(sqafID, output$msgCheck, 
                    dataSummary3$Perc[i], output$threshold, 
                    sqafYear, pt, NA, dataSummary3$asylum[i])
+    
+    # And update the number of data points
+    UpdateDataPointRow(sqafID, dataSummary3$asylum[i], output$threshold, 1)
     
     
     if (output$threshold >= 2) {
@@ -619,7 +657,11 @@ CheckDemographicCoverage <-
 CheckSubNationalCoverage <-
   function(sqafID, demoData) {
     
-    #--0-- Get the current number of rows
+    #--0a-- Append the data point summaries
+    AppendDataPointRows(sqafID, demoData, 1)
+  
+    
+    #--0b-- Get the current number of rows
     currentNumRows <- nrow(sqafList)
     
     #--1-- Get the relevant sqaf check
@@ -671,6 +713,9 @@ CheckSubNationalCoverage <-
       AppendSQAFItem(sqafID, output$msgCheck, #output$msgAction, 
                      dataSummary$NumLocations[i], output$threshold, 
                      sqafYear, NA, NA, dataSummary$asylum[i])
+      
+      # And update the number of data points
+      UpdateDataPointRow(sqafID, dataSummary$asylum[i], output$threshold, 1)
       
     }
     
@@ -900,12 +945,17 @@ CheckDemographicUrbanRural <- function(sqafID, dataDemo) {
 CheckRefugeeReturns <-
   function(sqafID, dataREFROC, dataRET, isASR) {
     
+    
     currentNumRows <- nrow(sqafList)
     # The population type will always be returns...
     pt <- "RET"  
     
     #--1-- Extract the returns   
     dataReturns <- CompareRefugeeReturns(dataREFROC, dataRET, isASR )
+    
+    #--0a-- Append the data point summaries correctly by origin rather than asylum
+    AppendDataPointRows(sqafID, dataReturns %>% mutate(asylum = origin), 1)
+    
     
     # OK here we need to catch infinite percentages - and use a special 1,000,000 number so that they still appear as errors.
     dataReturns$Perc[is.infinite(dataReturns$Perc)] <- 1000000
@@ -946,6 +996,10 @@ CheckRefugeeReturns <-
       AppendSQAFItem(sqafID, output$msgCheck,
                      dataReturns$Perc[i], output$threshold, 
                      sqafYear, pt, dataReturns$origin[i], dataReturns$origin[i])
+      
+      # And update the number of data points - note that this is by origin not asylum
+      UpdateDataPointRow(sqafID, dataReturns$origin[i], output$threshold, 1)
+      
       
       # Log the numbers
       if (output$threshold >= 2) {
@@ -1004,6 +1058,9 @@ CheckDemographicTotals <- function(sqafID, dataDemo, gr, dataREFROC, dataRET, is
   #--3-- Use the comparison function to produce a data summary comparing the two
   dataSummary <- CompareDemographicsAndPopulationTotals(dataDemographics, gr)
   
+  #--0a-- Append the data point summaries
+  AppendDataPointRows(sqafID, dataSummary, 1)
+  
   
   #--3-- Go through the data summary and flag all non-zero differences as errors...
   # for reference the column Total is from the demographic data; TotalPopulation is from the gr data
@@ -1040,6 +1097,9 @@ CheckDemographicTotals <- function(sqafID, dataDemo, gr, dataREFROC, dataRET, is
       AppendSQAFItem(sqafID, output$msgCheck,
                      row$Diff, output$threshold, 
                      sqafYear, row$PT, row$origin, row$asylum)
+      
+      # And update the number of data points - note that this is by origin not asylum
+      UpdateDataPointRow(sqafID, row$asylum, output$threshold, 1)
       
       
       if (output$threshold >= 2) {
@@ -1713,8 +1773,86 @@ CheckCountryCodes <- function(sqafID, gr) {
 
 
 
+#-------------------------------------------------------------------------------------------------------------------------
+# Appends the row with the total data points
+AppendDataPointRows <- function(sqafID, data, numberOfSubRules) {
+  
+  # group by asylum and get the number of rows...
+  dataSummary <- data %>% 
+    group_by(asylum) %>%
+    summarise(Count = n())
 
 
+  for( i in 1: nrow(dataSummary)) {
+    AppendDataPointRow( sqafID, dataSummary$asylum[i], numberOfSubRules, dataSummary$Count[i])
+  }
+  
+}
+
+#-------------------------------------------------------------------------------------------------------------------------
+# Appends the row with the total data points
+AppendDataPointRow <- function(sqafID, asylum, numberOfSubRules, totalRows) {
+  
+  # Check that it does not already exist ...
+  matchingRows <- sqafDataPoints[sqafDataPoints$ID == sqafID & sqafDataPoints$Asylum == asylum, ]
+  
+#View(matchingRows)  
+#print(IsNNN(matchingRows))  
+
+#  print(paste(sqafID, asylum, numberOfSubRules, totalRows))
+#  print(nrow(sqafDataPoints))
+  
+  if ( is.null(matchingRows) | nrow(matchingRows) == 0) {
+    
+#    print("Doing it")    
+    
+    totalMultiplied <- as.integer(totalRows) * as.integer(numberOfSubRules)
+    
+#    print(totalMultiplied)    
+    
+    
+    # adds the sqafID, asylum code and the total...
+    sqafDataPoints[nrow(sqafDataPoints) + 1,] <<- 
+      
+      c(as.character(sqafID), # ID
+        as.character(asylum), # Asylum
+        totalMultiplied, # total
+        0, 0, 0, 0
+      )
+
+  }
+  
+#  print(paste("AFTER", sqafID, asylum, numberOfSubRules, totalRows))  
+}
+
+
+#-------------------------------------------------------------------------------------------------------------------------
+# Appends the row with the total data points
+UpdateDataPointRow <- function(sqafID, asylum, threshold, count) {
+  
+#print(paste("Updating row ", sqafID, asylum, threshold, count))  
+  
+  # adds the count to the relevant column
+  colName <- paste0("Threshold_", threshold)
+  if (threshold == 0) {
+    colName <- "Total" 
+  }
+
+  # BIG Assumption - we will always just have one entry by SQAF ID and asylum
+  tempCount <- sqafDataPoints[[as.character(colName)]][sqafDataPoints$ID == sqafID & sqafDataPoints$Asylum == asylum ][ 1 ]
+  
+  #print(tempCount)      
+  
+  tempCount <- as.integer(tempCount) + as.integer(count)
+  
+  #print(tempCount)    
+  
+  sqafDataPoints[[colName]][sqafDataPoints$ID == sqafID & sqafDataPoints$Asylum == asylum ] <<- tempCount
+  
+}
+
+#sqafDataPoints[[as.character("ID")]]
+#sqafDataPoints[[as.character("Total")]][sqafDataPoints$ID == "1.4" & sqafDataPoints$Asylum == "ARM" ][1]
 
 
 

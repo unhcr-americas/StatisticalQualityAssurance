@@ -232,13 +232,42 @@ write( toJSON(
 # So here we would need to know the number of datapoints that were valid (i.e. 1) versus 2, 3, 4, by test
 # Some tests are by country of asylum only, others are by origin, asylum and / or population type.
 # Therefore this needs to happen in each test? or at least in each of the sub tests?
+# Data frame would be Asylum, Threshold_1, Threshold_2, Threshold_3, Threshold_4
 
 
+########################################################
+########################################################
+########################################################
+########################################################
+########################################################
+########################################################
+
+sqafDataPoints$Total <- as.integer(sqafDataPoints$Total)
+sqafDataPoints$Threshold_1 <- as.integer(sqafDataPoints$Threshold_1)
+sqafDataPoints$Threshold_2 <- as.integer(sqafDataPoints$Threshold_2)
+sqafDataPoints$Threshold_3 <- as.integer(sqafDataPoints$Threshold_3)
+sqafDataPoints$Threshold_4 <- as.integer(sqafDataPoints$Threshold_4)
+
+sqafDataPoints$Delta <- sqafDataPoints$Total - 
+  sqafDataPoints$Threshold_1 - sqafDataPoints$Threshold_2 - sqafDataPoints$Threshold_3 - sqafDataPoints$Threshold_4
+
+print( IsNNN( nrow(sqafDataPoints$ID[sqafDataPoints$ID == "1.1" & sqafDataPoints$Asylum == "COD" ])))
+#print( IsNNN( nrow(sqafDataPoints$ID[sqafDataPoints$ID == "1.1" & sqafDataPoints$Asylum == "COD" ])))
+View(sqafDataPoints)
+
+unique(sqafDataPoints$ID[sqafDataPoints$Total != 
+                 sqafDataPoints$Threshold_1 + 
+                 sqafDataPoints$Threshold_2 + 
+                 sqafDataPoints$Threshold_3 + 
+                 sqafDataPoints$Threshold_4])
 
 
 #-------------------------------------------------------------------------------------------------------------------------
 # Testing .............................
 
+View(dataREFROC)
+View(dataRET)
+dataReturns <- CompareRefugeeReturns(dataREFROC, dataRET, isASR )
 
 paste0(c("Test", sqafChecks$ID), collapse= ", ")
 
