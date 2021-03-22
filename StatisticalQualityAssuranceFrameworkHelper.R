@@ -166,15 +166,15 @@ PreparePopulationData <-
 StandardiseSQAFList <-
   function( sqafList) {
     
-    # Standardise the country names to used IDs which are compatible with the system
-    countriesHEXIS <- LoadCountryListFromRefugeeStatistics()
-    countriesHEXIS <- countriesHEXIS %>% select(id, code)
-    countriesHEXIS$AsylumID <- countriesHEXIS$OriginID <- countriesHEXIS$id
+    # Standardise the country names to use IDs which are compatible with the system
+    countriesPSR <- LoadCountryListFromPopulationStatisticsReference()
+    countriesPSR$AsylumID <- countriesPSR$OriginID <- countriesPSR$ID
     
+    # Then try to join the country list together so we can include the IDs
     b4 <-nrow(sqafList)
     
-    sqafList <- left_join(sqafList, countriesHEXIS %>% select(OriginID, code), by=c("Origin"="code"))
-    sqafList <- left_join(sqafList, countriesHEXIS %>% select(AsylumID, code), by=c("Asylum"="code"))
+    sqafList <- left_join(sqafList, countriesPSR %>% select(OriginID, code), by=c("Origin"="code"))
+    sqafList <- left_join(sqafList, countriesPSR %>% select(AsylumID, code), by=c("Asylum"="code"))
     
     after <- nrow(sqafList)
     
@@ -184,8 +184,8 @@ StandardiseSQAFList <-
       print(paste0("WARNING: Duplicates added by the join between the sqaf list and the origin / asylum.  Before: ", b4, " and after: ", after, "."))
     }
     
-    print(paste0("Origin codes that have no ID", unique(sqafList$Origin[!is.na(sqafList$Origin) & is.na(sqafList$OriginID)]), collapse=", "))
-    print(paste0("Asylum codes that have no ID", unique(sqafList$Asylum[!is.na(sqafList$Asylum) & is.na(sqafList$AsylumID)]), collapse=", "))  
+    print(paste0("Origin codes that have no ID: ", paste0(unique(sqafList$Origin[!is.na(sqafList$Origin) & is.na(sqafList$OriginID)]), collapse=", ")))
+    print(paste0("Asylum codes that have no ID: ", paste0(unique(sqafList$Asylum[!is.na(sqafList$Asylum) & is.na(sqafList$AsylumID)]), collapse=", ")))  
 
         
     # Ensure that the result, severity and year are all integers
@@ -193,7 +193,7 @@ StandardiseSQAFList <-
     sqafList$Result <- as.integer(sqafList$Result)
     sqafList$Severity <- as.integer(sqafList$Severity)
     
-    View(sqafList)
+#    View(sqafList)
         
     returnValue <- sqafList
   }

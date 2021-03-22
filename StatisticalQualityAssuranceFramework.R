@@ -170,18 +170,33 @@ for( i in 1: nrow(sqafChecks)) {
 
 
 
-
 #-------------------------------------------------------------------------------------------------------------------------
-# Export the SQAF list as JSON
+#-------------------------------------------------------------------------------------------------------------------------
+#----- Export the SQAF list as JSON --------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
 
 # Standardise the country names to used IDs which are compatible with the system
 # Ensure that the result, severity and year are all integers
 sqafList <- StandardiseSQAFList(sqafList)
 
+
+#aaaCountriesPSR <- LoadCountryListFromPopulationStatisticsReference()
+
+#length(unique(aaaCountriesPSR$ID))
+#nrow(aaaCountriesPSR)
+
+#nrow(sqafList)
+
+#unique(sqafList$Origin[!is.na(sqafList$Origin) & is.na(sqafList$OriginID)])
+#unique(sqafList$Asylum[!is.na(sqafList$Asylum) & is.na(sqafList$AsylumID)])
+       
+#View(countryLK)
+
 #countriesHEXIS <- LoadCountryListFromRefugeeStatistics()
 #View(countriesHEXIS)
 #sqafList <- left_join(sqafList, countriesHEXIS %>% select, by=c("origin"="code"))
-
+#countriesHEXIS <- NULL
 
 #sqafList$Year <- as.integer(sqafList$Year)
 #sqafList$Result <- as.integer(sqafList$Result)
@@ -210,6 +225,13 @@ write( toJSON(
        paste0(sqafDirectoryName, "/SQAF_Checks.json"))
 
 
+
+#-------------------------------------------------------------------------------------------------------------------------
+# visualise the results
+# sqaf data points
+# So here we would need to know the number of datapoints that were valid (i.e. 1) versus 2, 3, 4, by test
+# Some tests are by country of asylum only, others are by origin, asylum and / or population type.
+# Therefore this needs to happen in each test? or at least in each of the sub tests?
 
 
 
