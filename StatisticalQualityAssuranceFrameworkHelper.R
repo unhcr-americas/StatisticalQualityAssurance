@@ -26,7 +26,7 @@
 # declare our data cube as an empty data frame with the relevant column types
 sqafList <- 
   data.frame(
-    ID = character(), # e.g. the SQAF ID 1.2.3
+    ID = factor(), # e.g. the SQAF ID 1.2.3
     
     Notes = character(),
     
@@ -43,7 +43,7 @@ sqafList <-
 # And this contains a summary of the data points for each check
 sqafDataPoints <-
   data.frame(
-    ID = character(), # e.g. the SQAF ID 1.2.3
+    ID = factor(), # e.g. the SQAF ID 1.2.3
     
     Asylum = character(),    
 
@@ -169,8 +169,10 @@ PreparePopulationData <-
     # and remove the irrelevant columns
     gr$CoA <- gr$CoO <- gr$ISO3CoO <- gr$ISO3CoA <- gr$populationType <- NULL
     
-    # Strip out the IDMC and UNRWA data
-    gr <- gr %>% filter(! PT %in% c("Total", "IDMC", "UNRWA"))
+    # Strip out the IDMC and UNRWA data, totals and naturalisation and resettlement
+    popTypesToRemove <- c("Total", "IDMC", "UNRWA", "NAT", "RST")
+    print(paste0("Preparing the population data and removing population types that are not relevant", paste0(popTypesToRemove, collapse=", ")))
+    gr <- gr %>% filter(! PT %in% popTypesToRemove)
     
     returnValue <- gr
   }
@@ -520,7 +522,11 @@ CheckDataReceived <-
     print(paste0("Found ", length(incorrectSubmissions), " countries of asylum that have UNEXPECTED data submissions."))
     
 
-    #--2-- Loop through them and identify any we need to record as messages
+    #--2-- Append the data point summaries (we need to package as data frame)
+    AppendDataPointRows(sqafID, data.frame(asylum = countryList), 2)
+    
+    
+    #--3-- Loop through them and identify any we need to record as messages
     numViolating <- 0
     
     # Loop through the missing submissions
@@ -543,6 +549,9 @@ CheckDataReceived <-
                        0, output$threshold, 
                        sqafYear, NA, NA, missingSubmissions[i])
         
+        
+        # And update the number of data points
+        UpdateDataPointRow(sqafID, missingSubmissions[i], output$threshold, 1)
         
         if (output$threshold >= 2) {
           numViolating <- numViolating + 1
@@ -571,6 +580,8 @@ CheckDataReceived <-
                        0, output$threshold, 
                        sqafYear, NA, NA, incorrectSubmissions[i])
         
+        # And update the number of data points
+        UpdateDataPointRow(sqafID, incorrectSubmissions[i], output$threshold, 1)
         
         if (output$threshold >= 2) {
           numViolating <- numViolating + 1
@@ -1791,6 +1802,7 @@ AppendDataPointRows <- function(sqafID, data, numberOfSubRules) {
 
 #-------------------------------------------------------------------------------------------------------------------------
 # Appends the row with the total data points
+# Note that this will only include data points where there are countries of asylum.  This makes sense in the context
 AppendDataPointRow <- function(sqafID, asylum, numberOfSubRules, totalRows) {
   
   # Check that it does not already exist ...

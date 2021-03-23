@@ -81,6 +81,9 @@ source(paste0(rootScriptDirectory,"StatisticalQualityAssurance/StatisticalQualit
 # Load the QA checks from the excel summary file
 sqafChecks <- read_excel(paste0(sqafDirectoryName, "SQAF_ValidationChecks.xlsx"), sheet=1, range=cell_cols("A:L"), n_max=10000)
 
+levels(sqafList$ID) <- rev(sqafChecks$ID)
+levels(sqafDataPoints$ID) <- rev(sqafChecks$ID)
+
 # ensure the ID is a character
 sqafChecks$ID <- as.character(sqafChecks$ID)
 
@@ -180,6 +183,7 @@ for( i in 1: nrow(sqafChecks)) {
 # Ensure that the result, severity and year are all integers
 sqafList <- StandardiseSQAFList(sqafList)
 
+#View(sqafList)
 
 #aaaCountriesPSR <- LoadCountryListFromPopulationStatisticsReference()
 
@@ -251,16 +255,114 @@ sqafDataPoints$Threshold_4 <- as.integer(sqafDataPoints$Threshold_4)
 sqafDataPoints$Delta <- sqafDataPoints$Total - 
   sqafDataPoints$Threshold_1 - sqafDataPoints$Threshold_2 - sqafDataPoints$Threshold_3 - sqafDataPoints$Threshold_4
 
-print( IsNNN( nrow(sqafDataPoints$ID[sqafDataPoints$ID == "1.1" & sqafDataPoints$Asylum == "COD" ])))
-#print( IsNNN( nrow(sqafDataPoints$ID[sqafDataPoints$ID == "1.1" & sqafDataPoints$Asylum == "COD" ])))
-View(sqafDataPoints)
+# Check here for negative numbers....
 
+# Then we add the delta to Threshold_1
+sqafDataPoints$Threshold_1 <- sqafDataPoints$Threshold_1 + sqafDataPoints$Delta
+
+#print( IsNNN( nrow(sqafDataPoints$ID[sqafDataPoints$ID == "1.1" & sqafDataPoints$Asylum == "COD" ])))
+#print( IsNNN( nrow(sqafDataPoints$ID[sqafDataPoints$ID == "1.1" & sqafDataPoints$Asylum == "COD" ])))
+#View(sqafDataPoints)
+
+# Check for bad calculations
 unique(sqafDataPoints$ID[sqafDataPoints$Total != 
                  sqafDataPoints$Threshold_1 + 
                  sqafDataPoints$Threshold_2 + 
                  sqafDataPoints$Threshold_3 + 
                  sqafDataPoints$Threshold_4])
 
+#sqafPTToFilter <- "AFG"
+sqafPTToFilter <- "MYA"
+sqafPTToFilter <- NULL
+
+# Then we need to normalise the data
+sqafDataNarrow <- sqafDataPoints %>%
+  filter(Asylum == sqafPTToFilter) %>%
+  group_by(ID) %>%
+  summarise(
+    Total = sum(Total),
+    Threshold_4 = sum(Threshold_4),
+    Threshold_3 = sum(Threshold_3),
+    Threshold_2 = sum(Threshold_2),
+    Threshold_1 = sum(Threshold_1)
+
+  ) %>%
+  # add the percentages
+  mutate(
+    OK = Threshold_1 / Total,
+    Could_Fix = Threshold_2 / Total,
+    Should_Fix = Threshold_3 / Total,
+    Must_Fix = Threshold_4 / Total
+  ) %>%
+  select( ID, OK, Could_Fix, Should_Fix, Must_Fix ) %>%
+  pivot_longer(!ID, names_to = "Severity", values_to = "Count")
+#  gather(key="ID", value="Severity", -ID)
+
+#View(sqafDataNarrow)
+
+#sqafDataNarrow$Label <- ""
+sqafTitles <- c("OK", "Could Fix", "Should Fix", "Must Fix")
+sqafKeys <- c("OK", "Could_Fix", "Should_Fix", "Must_Fix")
+sqafColours <- c("#2c8ac1", "#f7bb16", "#e77b37", "#d23f67")
+sqafSeverityList <- data.frame(
+  # Remember to set the levels as shown in this guide.  This is what enforces the order of the elements
+  # https://stackoverflow.com/questions/31638771/r-reorder-levels-of-a-factor-alphabetically-but-one
+  # Titles
+  Title=factor(sqafTitles, levels=sqafTitles),
+  # The keys
+  Key=factor(sqafKeys, levels=sqafKeys), 
+  
+  # Pretty legend colours
+  Legend=factor(sqafColours, levels=sqafColours)
+)
+
+#sqafDataNarrow$Severity <- as.factor(sqafDataNarrow$Severity)
+#levels(sqafDataNarrow$Severity) <- sqafSeverityList$Key # sqafSeverityList$Key
+#levels(sqafDataNarrow$Severity) <- c("d_Must_Fix", "c_Should_Fix", "b_Could_Fix", "a_OK")
+
+#sqafColors <- c("#eeeeee", "#aaaaaa", "#505050", "#000000")
+#sqafColours <- c("#d23f67", "#f7bb16", "#e77b37", "#2c8ac1")
+#sqafColours <- c("#2c8ac1", "#e77b37", "#f7bb16", "#d23f67")
+
+#sqafDataNarrow <- sqafDataNarrow[order(sqafDataNarrow$Severity, desc(sqafDataNarrow$ID)),]
+
+#factor(sqafDataNarrow$Severity) <- c("OK", "Could_Fix", "Should_Fix", "Must_Fix")
+
+#levels(sqafDataNarrow$Severity) <- c("Must_Fix", "Should_Fix", "Could_Fix", "OK"   )
+
+
+#levels(sqafDataNarrow$ID) <- unique(sqafDataNarrow$ID)
+#unique(sqafDataNarrow$Severity)
+#unique(sqafDataNarrow$ID)
+#levels(sqafDataNarrow$Severity)
+
+# order the data by the ID, then the severity
+#sqafDataNarrow <- sqafDataNarrow %>% arrange(ID, Severity)
+
+sqafDataNarrow <- CalculatePercentageWithLabel(sqafDataNarrow, "ID", NA, "Severity", "Count", 5)
+
+sqafTitle <- "Summary of SQAF checks"
+if ( sqafPTToFilter != "") {
+  sqafTitle <- paste0(sqafTitle, " - ", sqafPTToFilter)
+}
+
+# join the titles to the data
+sqafDataNarrow <- left_join(sqafDataNarrow, sqafSeverityList, by=c("Severity"="Key") )
+#sqafDataNarrow$Title <- as.factor(sqafDataNarrow$Title)
+#levels(sqafDataNarrow$Title) <- sqafSeverityList$Title
+
+#sqafDataNarrow$ID <- as.factor(sqafDataNarrow$ID)
+#levels(sqafDataNarrow$ID) <- sqafChecks$ID
+#levels(sqafDataNarrow$ID)
+
+plotSQAF <- GenerateChartWithStackedBarChart(sqafDataNarrow, "ID", "Count", "PercentLabel", "Title", 
+                          sqafColours, 
+                          sqafTitle, 
+                          "Source: Gucci SQAF", TRUE) 
+plotSQAF
+
+
+#LoadCountryListFromPopulationStatisticsReference()
 
 #-------------------------------------------------------------------------------------------------------------------------
 # Testing .............................
@@ -382,7 +484,12 @@ dodgyList <- violating(gr, validator(.data = ruleList))
 View(dodgyList)
 
 
-totalIDPs <- dataIDP %>% select(origin, totalStartYear, totalMidYear) %>% 
+#-------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
+totalIDPs <- dataIDPIOC %>% select(origin, totalStartYear, totalMidYear) %>% 
   group_by (origin) %>%
   summarise(
     Start = sum(totalStartYear),
@@ -390,12 +497,13 @@ totalIDPs <- dataIDP %>% select(origin, totalStartYear, totalMidYear) %>%
   )
 View(totalIDPs)
 
-newIDPs <- dataIDP %>% select(origin, increasesNew, increasesOther) %>% 
+newIDPs <- dataIDPIOC %>% select(origin, increasesNew, increasesOther) %>% 
   group_by (origin) %>%
   summarise(
     increasesNew = sum(increasesNew),
     increasesOther = sum(increasesOther)
   )
+
 newIDPs$Increases <- newIDPs$increasesNew + newIDPs$increasesOther
 sum(newIDPs$Increases)
 sum(dataIDP$decreasesReturned)
@@ -403,4 +511,59 @@ sum(dataIDP$decreasesOther)
 sum(dataIDP$totalMidYear)
 
 View(newIDPs)
+
+#-------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
+#View(dataREFROC)
+totalREFs <- dataREFROC %>% select(asylum, yearStartTotal, yearEndTotal) %>% 
+  group_by (asylum) %>%
+  summarise(
+    Start = sum(yearStartTotal),
+    End = sum(yearEndTotal)
+  )
+View(totalREFs)
+
+newREFs <- dataREFROC %>% select(asylum, groupRecognition, temporaryProtection, individualRecognition) %>% 
+  group_by (asylum) %>%
+  summarise(
+    groupRecognition = sum(groupRecognition),
+    temporaryProtection = sum(temporaryProtection),
+    individualRecognition = sum(individualRecognition)
+  )
+
+newREFs$Increases <- newREFSs$groupRecognition + newREFSs$temporaryProtection + newREFSs$individualRecognition
+View(newREFs)
+
+
+
+#-------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
+View(dataRSD)
+
+totalRSD <- dataRSD %>% select(asylum, TotalStartYear, PendingEndYear) %>% 
+  group_by (asylum) %>%
+  summarise(
+    Start = sum(TotalStartYear),
+    End = sum(PendingEndYear)
+  )
+View(totalRSD)
+
+newRSD <- dataRSD %>% select(asylum, AppliedDuringTheYear) %>% 
+  group_by (asylum) %>%
+  summarise(
+    AppliedDuringTheYear = sum(AppliedDuringTheYear)
+  )
+
+View(newRSD)
+
+
+
+View(dataHST)
+
 
