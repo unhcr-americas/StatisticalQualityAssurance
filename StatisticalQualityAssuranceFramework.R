@@ -63,7 +63,8 @@ BuildDataCube()
 
 #-----4. Load the demographics------------------------------------------------------------------------------------------------
 # Note that we don't fix the data here as we want to identify potential issues...
-dataDemographics <- LoadDemographics2020(dataPop, FALSE)
+dataDemographics <- LoadDemographics2020(dataPop, FALSE, FALSE)
+#View(dataDemographics)
 
 # Ensure that the REF table has a PT column
 dataREFROC$PT <- dataREFROC$populationType
@@ -156,6 +157,8 @@ write( toJSON(
 # Some tests are by country of asylum only, others are by origin, asylum and / or population type.
 # Therefore this needs to happen in each test? or at least in each of the sub tests?
 # Data frame would be Asylum, Threshold_1, Threshold_2, Threshold_3, Threshold_4
+sqafChartWidth <- 175
+sqafChartHeight <- 250
 
 sqafDataPoints <- StandardiseSQAFDataPoints(sqafDataPoints)
 
@@ -167,14 +170,14 @@ plot(SQAFSummaryChart("AFG"))
 plot(SQAFSummaryChart("MYA"))
 
 # Save the all chart
-SaveChart(SQAFSummaryChart(), 175, 250, paste0(sqafDirectoryName, "Output/SQAF__ALL.png" ))
+SaveChart(SQAFSummaryChart(), sqafChartWidth, sqafChartHeight, paste0(sqafDirectoryName, "Output/SQAF__ALL.png" ))
 
 # Save a chart for each country
 for( i in 1: length(sqafCountryList)) {
   print(sqafCountryList[i])
   SaveChart(
     SQAFSummaryChart(sqafCountryList[i]), 
-    175, 250, 
+    sqafChartWidth, sqafChartHeight, 
     paste0(sqafDirectoryName, "Output/SQAF_", sqafCountryList[i], ".png" )
   )
   
@@ -189,4 +192,4 @@ for( i in 1: length(sqafCountryList)) {
 View(sqafList)
 View(sqafDataPoints)
 
-
+View(dataRSDFull)
