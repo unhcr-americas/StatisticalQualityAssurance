@@ -42,63 +42,61 @@ sqafIsASR <- TRUE
 
 
 #-------------------------------------------------------------------------------------------------------------------------
-# Declare all the relevant folders and file names
-genericDataDirectoryName <- paste0(rootDataDirectory, "Data/")
-
-# The master data directory - within this there will be files containing the historic data on refugees, asylum seekers and IDPs
-masterDataDirectoryName <- paste0(rootDataDirectory, "Data/Master_Data/")
-# The current ASR data
-workingDirectoryName <- paste0(rootDataDirectory, "Data_ASR/")
-
-# The demographics foler
-demographicDataDirectoryName <- paste0(rootDataDirectory, "Data/Demographics/")
-
 # sqaf.......
 sqafDirectoryName <- paste0(rootOneDriveDirectory, "Data_Quality_Assurance/")
 
-# We will need both the live data and the historic data....
-
-
 #-------------------------------------------------------------------------------------------------------------------------
-# Run the ASR / MYSR loader to load the latest data in....
+#-------------------------------------------------------------------------------------------------------------------------
+#-----Load the source data -----------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
 
-# Load population totals
+#-----1. Load the source data -----------------------------------------------------------------------------------------------
+LoadSourceData(sqafYear, sqafIsASR)
 
-# Load solutions
+#-----2. Build the data cube ------------------------------------------------------------------------------------------------
+BuildDataCube()
 
-# Load demographics
+#-----3. Load the master data------------------------------------------------------------------------------------------------
+# Warning this will take a few moments!!
+#LoadAllMasterData()  
 
-# Load RSD...
+#-----4. Load the demographics------------------------------------------------------------------------------------------------
+# Note that we don't fix the data here as we want to identify potential issues...
+dataDemographics <- LoadDemographics2020(dataPop, FALSE)
 
-# Ensure that all the tables have a PT column
+# Ensure that the REF table has a PT column
 dataREFROC$PT <- dataREFROC$populationType
 
 
 #-------------------------------------------------------------------------------------------------------------------------
-# Reloading this will also reset the global sqafList variable, which we want...
+#-------------------------------------------------------------------------------------------------------------------------
+#-----Load the SQAF functions and check list and reset the other data ----------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
+
+#-------------------------------------------------------------------------------------------------------------------------
+#--a-- Reloading this will also reset the global sqafList variable, which we want...
 source(paste0(rootScriptDirectory,"StatisticalQualityAssurance/StatisticalQualityAssuranceFrameworkHelper.R"))
 
-# Load the QA checks from the excel summary file
+#--b-- Load the QA checks from the excel summary file
 sqafChecks <- read_excel(paste0(sqafDirectoryName, "SQAF_ValidationChecks.xlsx"), sheet=1, range=cell_cols("A:L"), n_max=10000)
 
+#--c-- Set the levels of the SQAF list and the list of data points based on the list of checks to run
+# Note that we set the levels in reverse so that the charts look good!!
 levels(sqafList$ID) <- rev(sqafChecks$ID)
 levels(sqafDataPoints$ID) <- rev(sqafChecks$ID)
 
-# ensure the ID is a character
+#--d-- ensure the ID is a character
 sqafChecks$ID <- as.character(sqafChecks$ID)
 
-#View(sqafChecks)
-#View(dataDemo)
 
-# Filter the demoData to the latest year...
-# Um no - we want the rawer output from above for this
-dataDemographics <- dataDemo2020
-#dataDemo <- ddAll %>% filter(Year == sqafYear)
-#View(dataDemo)
 
-# Iterate through each and evaluate the appropriate helper function...
-# We can use this process to load it
-
+#-------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
+#-----Run the checks -----------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
 for( i in 1: nrow(sqafChecks)) {
   print("")
   print("")
@@ -107,61 +105,11 @@ for( i in 1: nrow(sqafChecks)) {
   print(paste0("Processing check: ", sqafChecks$ID[i], " (", sqafChecks$Area[i] , ") ", sqafChecks$Description[i] ))
   print("------------------------------------------------------------------")
   print("------------------------------------------------------------------")
+  
   # Generate the right arguments
-  argStr <- ""
+  argStr <- GetDatasetArgumentList(sqafChecks$Data[i])
   
-  # Here differentiate demographics from returns....
-  if (sqafChecks$Data[i] == "Demographics") {
-    argStr <- "dataDemographics"
-    
-  } else if (sqafChecks$Data[i] == "Refugees") {
-    argStr <- "dataREFROC, sqafIsASR"
-    
-  } else if (sqafChecks$Data[i] == "Returns") {
-    # returns need the REFROC, returns and a flag as to whether or not this is the ASR
-    argStr <- "dataREFROC, dataRET, sqafIsASR"
-    
-  } else if (sqafChecks$Data[i] == "DemoPoCs") {
-    argStr <- "dataDemographics, gr, dataREFROC, dataRET, sqafIsASR"
-
-  } else if (sqafChecks$Data[i] == "Stateless") {
-    argStr <- "dataSTAUDN, sqafIsASR"
-
-  } else if (sqafChecks$Data[i] == "Host-Community") {
-    argStr <- "dataHST, sqafIsASR"
-    
-  } else if (sqafChecks$Data[i] == "Asylum-seekers") {
-    argStr <- "dataRSD"
-
-  } else if (sqafChecks$Data[i] == "All-Asylum-seekers") {
-    argStr <- "dataRSDFull, dataRSD, sqafYear, sqafIsASR"
-    
-  } else if (sqafChecks$Data[i] == "AllBasis") {    
-    
-    argStr <- "dataREF, dataROC, dataRET, dataIDP, dataSTAUDN, dataOOC, dataVDA, dataHST, sqafIsASR"
-    
-  } else if (sqafChecks$Data[i] == "OOC") {    
-    
-    argStr <- "dataOOC"
-
-  } else if (sqafChecks$Data[i] == "VDA") {    
-    
-    argStr <- "dataVDA"    
-    
-  } else if (sqafChecks$Data[i] == "InternationallyForciblyDisplaced") {
-    argStr <- "gr"
-    
-  } else if (sqafChecks$Data[i] == "All") {
-    argStr <- "gr"
-    
-  } else if (sqafChecks$Data[i] == "All-Historic") {
-    argStr <- "gr, dataPoCs"
-    
-  }
-  
-
-  
-  
+  # Then run the check
   success <- eval(parse(text=paste0(sqafChecks$R_Validation_Function[i],"('",sqafChecks$ID[i],"', ", argStr, ")")))
   
   if (success == FALSE) {
@@ -183,39 +131,7 @@ for( i in 1: nrow(sqafChecks)) {
 # Ensure that the result, severity and year are all integers
 sqafList <- StandardiseSQAFList(sqafList)
 
-#View(sqafList)
 
-#aaaCountriesPSR <- LoadCountryListFromPopulationStatisticsReference()
-
-#length(unique(aaaCountriesPSR$ID))
-#nrow(aaaCountriesPSR)
-
-#nrow(sqafList)
-
-#unique(sqafList$Origin[!is.na(sqafList$Origin) & is.na(sqafList$OriginID)])
-#unique(sqafList$Asylum[!is.na(sqafList$Asylum) & is.na(sqafList$AsylumID)])
-       
-#View(countryLK)
-
-#countriesHEXIS <- LoadCountryListFromRefugeeStatistics()
-#View(countriesHEXIS)
-#sqafList <- left_join(sqafList, countriesHEXIS %>% select, by=c("origin"="code"))
-#countriesHEXIS <- NULL
-
-#sqafList$Year <- as.integer(sqafList$Year)
-#sqafList$Result <- as.integer(sqafList$Result)
-#sqafList$Severity <- as.integer(sqafList$Severity)
-
-
-# Note that even with these na and nulls specified, if a field is NA it is simply not included in the data
-# This is particularly the case with the PopulationType, Asylum and Origin.  We might need to find a better approach for handling these
-#x <- toJSON(sqafList, na="string", null="list")
-#x <- jsonlite::toJSON(sqafList, auto_unbox=TRUE)
-#glimpse(x)
-#cat(x)
-
-# Join the descriptions to the data (Is this required???????????)
-#sqafList <- left_join(sqafList, sqafChecks %>% select(ID, Description), by=c("ID"="ID"))
 # Write out the JSON data
 write( toJSON(sqafList), paste0(sqafDirectoryName, "/SQAF_Output.json"))
 
@@ -231,339 +147,46 @@ write( toJSON(
 
 
 #-------------------------------------------------------------------------------------------------------------------------
-# visualise the results
-# sqaf data points
-# So here we would need to know the number of datapoints that were valid (i.e. 1) versus 2, 3, 4, by test
+#-------------------------------------------------------------------------------------------------------------------------
+#----- visualise the results --------------------------------------------------------------------------------------------- 
+#-------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------
+
+# sqaf data points - so here we would need to know the number of datapoints that were valid (i.e. 1) versus 2, 3, 4, by test
 # Some tests are by country of asylum only, others are by origin, asylum and / or population type.
 # Therefore this needs to happen in each test? or at least in each of the sub tests?
 # Data frame would be Asylum, Threshold_1, Threshold_2, Threshold_3, Threshold_4
 
+sqafDataPoints <- StandardiseSQAFDataPoints(sqafDataPoints)
 
-########################################################
-########################################################
-########################################################
-########################################################
-########################################################
-########################################################
+# Test a few charts
+plot(SQAFSummaryChart())
+# plot(SQAFSummaryChart(NA)) # Same as above
+plot(SQAFSummaryChart(""))
+plot(SQAFSummaryChart("AFG"))
+plot(SQAFSummaryChart("MYA"))
 
-sqafDataPoints$Total <- as.integer(sqafDataPoints$Total)
-sqafDataPoints$Threshold_1 <- as.integer(sqafDataPoints$Threshold_1)
-sqafDataPoints$Threshold_2 <- as.integer(sqafDataPoints$Threshold_2)
-sqafDataPoints$Threshold_3 <- as.integer(sqafDataPoints$Threshold_3)
-sqafDataPoints$Threshold_4 <- as.integer(sqafDataPoints$Threshold_4)
+# Save the all chart
+SaveChart(SQAFSummaryChart(), 175, 250, paste0(sqafDirectoryName, "Output/SQAF__ALL.png" ))
 
-sqafDataPoints$Delta <- sqafDataPoints$Total - 
-  sqafDataPoints$Threshold_1 - sqafDataPoints$Threshold_2 - sqafDataPoints$Threshold_3 - sqafDataPoints$Threshold_4
-
-# Check here for negative numbers....
-
-# Then we add the delta to Threshold_1
-sqafDataPoints$Threshold_1 <- sqafDataPoints$Threshold_1 + sqafDataPoints$Delta
-
-#print( IsNNN( nrow(sqafDataPoints$ID[sqafDataPoints$ID == "1.1" & sqafDataPoints$Asylum == "COD" ])))
-#print( IsNNN( nrow(sqafDataPoints$ID[sqafDataPoints$ID == "1.1" & sqafDataPoints$Asylum == "COD" ])))
-#View(sqafDataPoints)
-
-# Check for bad calculations
-unique(sqafDataPoints$ID[sqafDataPoints$Total != 
-                 sqafDataPoints$Threshold_1 + 
-                 sqafDataPoints$Threshold_2 + 
-                 sqafDataPoints$Threshold_3 + 
-                 sqafDataPoints$Threshold_4])
-
-#sqafPTToFilter <- "AFG"
-sqafPTToFilter <- "MYA"
-sqafPTToFilter <- NULL
-
-# Then we need to normalise the data
-sqafDataNarrow <- sqafDataPoints %>%
-  filter(Asylum == sqafPTToFilter) %>%
-  group_by(ID) %>%
-  summarise(
-    Total = sum(Total),
-    Threshold_4 = sum(Threshold_4),
-    Threshold_3 = sum(Threshold_3),
-    Threshold_2 = sum(Threshold_2),
-    Threshold_1 = sum(Threshold_1)
-
-  ) %>%
-  # add the percentages
-  mutate(
-    OK = Threshold_1 / Total,
-    Could_Fix = Threshold_2 / Total,
-    Should_Fix = Threshold_3 / Total,
-    Must_Fix = Threshold_4 / Total
-  ) %>%
-  select( ID, OK, Could_Fix, Should_Fix, Must_Fix ) %>%
-  pivot_longer(!ID, names_to = "Severity", values_to = "Count")
-#  gather(key="ID", value="Severity", -ID)
-
-#View(sqafDataNarrow)
-
-#sqafDataNarrow$Label <- ""
-sqafTitles <- c("OK", "Could Fix", "Should Fix", "Must Fix")
-sqafKeys <- c("OK", "Could_Fix", "Should_Fix", "Must_Fix")
-sqafColours <- c("#2c8ac1", "#f7bb16", "#e77b37", "#d23f67")
-sqafSeverityList <- data.frame(
-  # Remember to set the levels as shown in this guide.  This is what enforces the order of the elements
-  # https://stackoverflow.com/questions/31638771/r-reorder-levels-of-a-factor-alphabetically-but-one
-  # Titles
-  Title=factor(sqafTitles, levels=sqafTitles),
-  # The keys
-  Key=factor(sqafKeys, levels=sqafKeys), 
+# Save a chart for each country
+for( i in 1: length(sqafCountryList)) {
+  print(sqafCountryList[i])
+  SaveChart(
+    SQAFSummaryChart(sqafCountryList[i]), 
+    175, 250, 
+    paste0(sqafDirectoryName, "Output/SQAF_", sqafCountryList[i], ".png" )
+  )
   
-  # Pretty legend colours
-  Legend=factor(sqafColours, levels=sqafColours)
-)
-
-#sqafDataNarrow$Severity <- as.factor(sqafDataNarrow$Severity)
-#levels(sqafDataNarrow$Severity) <- sqafSeverityList$Key # sqafSeverityList$Key
-#levels(sqafDataNarrow$Severity) <- c("d_Must_Fix", "c_Should_Fix", "b_Could_Fix", "a_OK")
-
-#sqafColors <- c("#eeeeee", "#aaaaaa", "#505050", "#000000")
-#sqafColours <- c("#d23f67", "#f7bb16", "#e77b37", "#2c8ac1")
-#sqafColours <- c("#2c8ac1", "#e77b37", "#f7bb16", "#d23f67")
-
-#sqafDataNarrow <- sqafDataNarrow[order(sqafDataNarrow$Severity, desc(sqafDataNarrow$ID)),]
-
-#factor(sqafDataNarrow$Severity) <- c("OK", "Could_Fix", "Should_Fix", "Must_Fix")
-
-#levels(sqafDataNarrow$Severity) <- c("Must_Fix", "Should_Fix", "Could_Fix", "OK"   )
-
-
-#levels(sqafDataNarrow$ID) <- unique(sqafDataNarrow$ID)
-#unique(sqafDataNarrow$Severity)
-#unique(sqafDataNarrow$ID)
-#levels(sqafDataNarrow$Severity)
-
-# order the data by the ID, then the severity
-#sqafDataNarrow <- sqafDataNarrow %>% arrange(ID, Severity)
-
-sqafDataNarrow <- CalculatePercentageWithLabel(sqafDataNarrow, "ID", NA, "Severity", "Count", 5)
-
-sqafTitle <- "Summary of SQAF checks"
-if ( sqafPTToFilter != "") {
-  sqafTitle <- paste0(sqafTitle, " - ", sqafPTToFilter)
 }
 
-# join the titles to the data
-sqafDataNarrow <- left_join(sqafDataNarrow, sqafSeverityList, by=c("Severity"="Key") )
-#sqafDataNarrow$Title <- as.factor(sqafDataNarrow$Title)
-#levels(sqafDataNarrow$Title) <- sqafSeverityList$Title
-
-#sqafDataNarrow$ID <- as.factor(sqafDataNarrow$ID)
-#levels(sqafDataNarrow$ID) <- sqafChecks$ID
-#levels(sqafDataNarrow$ID)
-
-plotSQAF <- GenerateChartWithStackedBarChart(sqafDataNarrow, "ID", "Count", "PercentLabel", "Title", 
-                          sqafColours, 
-                          sqafTitle, 
-                          "Source: Gucci SQAF", TRUE) 
-plotSQAF
 
 
-#LoadCountryListFromPopulationStatisticsReference()
 
 #-------------------------------------------------------------------------------------------------------------------------
 # Testing .............................
 
-View(dataREFROC)
-View(dataRET)
-dataReturns <- CompareRefugeeReturns(dataREFROC, dataRET, isASR )
-
-paste0(c("Test", sqafChecks$ID), collapse= ", ")
-
 View(sqafList)
-View(sqafChecks)
-
-View(dataDemographics)
-
-View(dataSTAUDN)
-View(dataPopulation)
-
-View(dataReturns)
-
-View(dataRSDFull)
-View(dataVDA)
-
-glimpse(sqafList)
-View(dataSTAUDN)
-View(gr)
-View(dataPoCs)
-
-View(dataHST)
-
-## TEST ##
-gr$PT <- gr$populationType
-gr$origin <- gr$CoO
-gr$asylum <- gr$CoA
-gr$Year <- sqafYear
-
-CheckDemographicTotals("2.2", dataDemographics, gr, dataREFROC, dataRET, sqafIsASR)
-
-dataSummary <- CompareDemographicsAndPopulationTotals(dataDemographics, gr)
-View(dataSummary)
-
-dataReturns <- CompareRefugeeReturns(dataREFROC, dataRET, isASR )
-View(dataReturns)
-
-unique(gr$populationType)
-unique(dataDemographics$PT)
-sum(dataDemographics$total[dataDemographics$PT == "RET" & dataDemographics$origin == "AFG"])
-sum(gr$TotalPopulation[gr$populationType == "RET" & gr$origin == "AFG"])
-
-sqafList$Notes[sqafList$ID == "6.1" & sqafList$Severity >= 2 ]
-
-unique(dataRSDFull$asylum[dataRSDFull$ApplicationDataType == "C" & dataRSDFull$Year == 2018])
-
-sum(dataDemographics$total[dataDemographics$asylum == "LBY" & dataDemographics$origin == "ERT" & dataDemographics$PT == "REF"])
-dataDemographics$Enumerator = dataDemographics$totalFemale_0_4 + dataDemographics$totalFemale_5_11 + dataDemographics$totalFemale_12_17 + 
-  dataDemographics$totalFemale_18_59 + dataDemographics$totalFemale_60 + 
-  dataDemographics$totalMale_0_4 + dataDemographics$totalMale_5_11 + dataDemographics$totalMale_12_17 + 
-  dataDemographics$totalMale_18_59 + dataDemographics$totalMale_60
-sum(dataDemographics$Enumerator[dataDemographics$asylum == "LBY" & dataDemographics$origin == "ERT" & dataDemographics$PT == "REF"])
-
-#print(DataFrameColumnExists(sqafList,"ID"))
-
-
-unique(dataDemographics$typeOfAggregation)
-
-
-
-unique(dataDemographics$AggregationType)
-
-
-View(dataDemographics)
-
-View(dataPoCs)
-View(dataSolutions)
-
-
-# https://www.markvanderloo.eu/yaRb/2016/03/25/easy-data-validation-with-the-validate-package/
-tempDodgyList <- violating(dataDemographics, validator(total==(totalFemaleTotal + totalMaleTotal) &
-             
-             totalFemaleTotal==(totalFemale_0_4 + totalFemale_5_11 + totalFemale_12_17 + 
-             totalFemale_18_24 + totalFemale_25_49 + totalFemale_50_59 + totalFemale_60 + Female_Unknown) &
-             totalMaleTotal==(totalMale_0_4 + totalMale_5_11 + totalMale_12_17 + 
-             totalMale_18_24 + totalMale_25_49 + totalMale_50_59 + totalMale_60 + Male_Unknown)
-))
-View(tempDodgyList)
-
-
-tempDodgyList <- violating(dataDemographics, validator(AggregationType != '' & AggregationType %in% c("Default", "18_59", "M_F", "Total")))
-unique(dataDemographics$AggregationType)
-nrow(tempDodgyList)
-
-
-
-# get the source data with the definitive list of country codes
-countryListTemp <- read_excel(paste0(rootOneDriveDirectory, "Reporting guidelines/Country_Codes.xlsx"), 
-                          sheet=1, range = cell_cols("A:B"), n_max=200000)
-
-
-View(countryListTemp)
-
-# Get the full list of country codes from our official list
-# (we can do this in the same way for the missing country data.)
-# Add the rule
-ruleList <- data.frame( 
-  name = "Invalid country of asylum",
-  description = "Invalid country of asylum.", 
-  rule = paste0("CoA %in% c('", paste0(c(countryListTemp$UNHCR_code), collapse= "','"), "')")
-  
-)
-
-r2 <- c( "Invalid country of origin", 
-         "Invalid country of origin.",
-         paste0("CoO %in% c('", paste0(c(countryListTemp$UNHCR_code), collapse= "','"), "')")
-)
-ruleList <- rbind(ruleList, r2)    
-
-# Then run the checks...
-dodgyList <- violating(gr, validator(.data = ruleList))
-View(dodgyList)
-
-
-#-------------------------------------------------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------------------------------------------------
-totalIDPs <- dataIDPIOC %>% select(origin, totalStartYear, totalMidYear) %>% 
-  group_by (origin) %>%
-  summarise(
-    Start = sum(totalStartYear),
-    End = sum(totalMidYear)
-  )
-View(totalIDPs)
-
-newIDPs <- dataIDPIOC %>% select(origin, increasesNew, increasesOther) %>% 
-  group_by (origin) %>%
-  summarise(
-    increasesNew = sum(increasesNew),
-    increasesOther = sum(increasesOther)
-  )
-
-newIDPs$Increases <- newIDPs$increasesNew + newIDPs$increasesOther
-sum(newIDPs$Increases)
-sum(dataIDP$decreasesReturned)
-sum(dataIDP$decreasesOther)
-sum(dataIDP$totalMidYear)
-
-View(newIDPs)
-
-#-------------------------------------------------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------------------------------------------------
-#View(dataREFROC)
-totalREFs <- dataREFROC %>% select(asylum, yearStartTotal, yearEndTotal) %>% 
-  group_by (asylum) %>%
-  summarise(
-    Start = sum(yearStartTotal),
-    End = sum(yearEndTotal)
-  )
-View(totalREFs)
-
-newREFs <- dataREFROC %>% select(asylum, groupRecognition, temporaryProtection, individualRecognition) %>% 
-  group_by (asylum) %>%
-  summarise(
-    groupRecognition = sum(groupRecognition),
-    temporaryProtection = sum(temporaryProtection),
-    individualRecognition = sum(individualRecognition)
-  )
-
-newREFs$Increases <- newREFSs$groupRecognition + newREFSs$temporaryProtection + newREFSs$individualRecognition
-View(newREFs)
-
-
-
-#-------------------------------------------------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------------------------------------------------
-View(dataRSD)
-
-totalRSD <- dataRSD %>% select(asylum, TotalStartYear, PendingEndYear) %>% 
-  group_by (asylum) %>%
-  summarise(
-    Start = sum(TotalStartYear),
-    End = sum(PendingEndYear)
-  )
-View(totalRSD)
-
-newRSD <- dataRSD %>% select(asylum, AppliedDuringTheYear) %>% 
-  group_by (asylum) %>%
-  summarise(
-    AppliedDuringTheYear = sum(AppliedDuringTheYear)
-  )
-
-View(newRSD)
-
-
-
-View(dataHST)
+View(sqafDataPoints)
 
 

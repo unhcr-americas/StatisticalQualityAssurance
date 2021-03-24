@@ -56,6 +56,108 @@ sqafDataPoints <-
     stringsAsFactors=FALSE # This negates the use of factors so that the character based columns can contain anything
   )
 
+# This is our data structure for the severity
+sqafTitles <- c("OK", "Could Fix", "Should Fix", "Must Fix")
+sqafKeys <- c("OK", "Could_Fix", "Should_Fix", "Must_Fix")
+sqafColours <- c("#2c8ac1", "#f7bb16", "#e77b37", "#d23f67")
+
+sqafSeverityList <- data.frame(
+  # Remember to set the levels as shown in this guide.  This is what enforces the order of the elements
+  # https://stackoverflow.com/questions/31638771/r-reorder-levels-of-a-factor-alphabetically-but-one
+  # Titles
+  Title = factor(sqafTitles, levels=sqafTitles),
+  # The keys
+  Key = factor(sqafKeys, levels=sqafKeys), 
+  
+  # Pretty legend colours
+  Legend = sqafColours
+)
+
+
+# The list of countries of asylum for which we want to test
+# We ignore the "Non-submissions" from these: "AND", "SMA", "VAT"
+sqafCountryList <- c("ABW","AFG","AIA","ALB","ALG","ANG","ANT","ARE","ARG", 
+                 "ARM","AUL","AUS","AZE","BAH","BAR","BDI","BEL","BEN","BER",
+                 "BES","BGD","BHS","BKF","BLR","BOL","BOT","BRA","BRU","BSN",
+                 "BUL","BVI","BZE","CAM","CAN","CAR","CAY","CHD","CHI","CHL",
+                 "CMR","COB","COD","COL","COS","CUB","CUW","CVI","CYP","CZE",
+                 "DEN","DJB","DMA","DOM","ECU","ERT","EST","ETH","FIJ","FIN",
+                 "FRA","FSM","GAB","GAM","GBR","GEO","GFR","GHA","GNB","GRE",
+                 "GRN","GUA","GUI","GUY","HAI","HKG","HON","HRV","HUN","ICE",
+                 "ICO","IND","INS","IRE","IRN","IRQ","ISR","ITA","JAM","JOR",
+                 "JPN","KAZ","KEN","KGZ","KOR","KOS","KUW","LAO","LBR","LBY",
+                 "LCA","LEB","LES","LIE","LKA","LTU","LUX","LVA","MAC","MAD",
+                 "MAU","MCD","MCO","MDA","MEX","MLI","MLS","MLW","MNE","MNG",
+                 "MOR","MOZ","MSR","MTA","MTS","MYA","NAM","NEP","NET","NGR",
+                 "NIC","NIG","NOR","NRU","NZL","OMN","PAK","PAN","PAR","PER",
+                 "PHI","PLW","PNG","POL","POR","QAT","ROM","RSA","RUS","RWA",
+                 "SAL","SAU","SEN","SEY","SIN","SLE","SOL","SOM","SPA",
+                 "SRB","SRV","SSD","STK","SUD","SUR","SVK","SVN","SWA","SWE",
+                 "SWI","SXM","SYR","TAN","TCI","THA","TJK","TKM","TMP","TOG",
+                 "TON","TRT","TUN","TUR","UAE","UGA","UKR","URU","USA","UZB",
+                 "VAN","VCT","VEN","WES","YEM","ZAM","ZIM") 
+
+
+#-------------------------------------------------------------------------------------------------------------------------
+# Gets the list of datasets in a string that is used to evaluate the specific logical checks
+GetDatasetArgumentList <- function(dataToken) {
+  
+  # Generate the right arguments
+  argStr <- ""
+  
+  # Here differentiate demographics from returns....
+  if (dataToken == "Demographics") {
+    argStr <- "dataDemographics"
+    
+  } else if (dataToken == "Refugees") {
+    argStr <- "dataREFROC, sqafIsASR"
+    
+  } else if (dataToken == "Returns") {
+    # returns need the REFROC, returns and a flag as to whether or not this is the ASR
+    argStr <- "dataREFROC, dataRET, sqafIsASR"
+    
+  } else if (dataToken == "DemoPoCs") {
+    argStr <- "dataDemographics, gr, dataREFROC, dataRET, sqafIsASR"
+    
+  } else if (dataToken == "Stateless") {
+    argStr <- "dataSTAUDN, sqafIsASR"
+    
+  } else if (dataToken == "Host-Community") {
+    argStr <- "dataHST, sqafIsASR"
+    
+  } else if (dataToken == "Asylum-seekers") {
+    argStr <- "dataRSD"
+    
+  } else if (dataToken == "All-Asylum-seekers") {
+    argStr <- "dAllRSDFull, dataRSD, sqafYear, sqafIsASR"
+    
+  } else if (dataToken == "AllBasis") {    
+    
+    argStr <- "dataREF, dataROC, dataRET, dataIDP, dataSTAUDN, dataOOC, dataVDA, dataHST, sqafIsASR"
+    
+  } else if (dataToken == "OOC") {    
+    
+    argStr <- "dataOOC"
+    
+  } else if (dataToken == "VDA") {    
+    
+    argStr <- "dataVDA"    
+    
+  } else if (dataToken == "InternationallyForciblyDisplaced") {
+    argStr <- "gr"
+    
+  } else if (dataToken == "All") {
+    argStr <- "gr"
+    
+  } else if (dataToken == "All-Historic") {
+    argStr <- "gr, dataPoCs"
+    
+  }
+  
+  
+  returnVal <- argStr
+}
+
 
 #-------------------------------------------------------------------------------------------------------------------------
 # Append an item to the global SQAF list
@@ -73,8 +175,8 @@ AppendSQAFItem <-
     
     #--2-- Assign the new info to the global list
     sqafList[nrow(sqafList) + 1,] <<- 
-      
-      c(as.character(sqafID), # ID
+      #c
+      list(as.character(sqafID), # ID
         as.character(msgCheck), # Additional Notes
         perc, # Percentage result
         threshold, # Severity
@@ -178,43 +280,7 @@ PreparePopulationData <-
   }
 
 
-#-------------------------------------------------------------------------------------------------------------------------
-# Cleans up the sqaf output to use integers for the years, results and severity, and also converts the country codes
-# and population types to use the lookups included in the refugee-statistics and popdata systems
-StandardiseSQAFList <-
-  function( sqafList) {
-    
-    # Standardise the country names to use IDs which are compatible with the system
-    countriesPSR <- LoadCountryListFromPopulationStatisticsReference()
-    countriesPSR$AsylumID <- countriesPSR$OriginID <- countriesPSR$ID
-    
-    # Then try to join the country list together so we can include the IDs
-    b4 <-nrow(sqafList)
-    
-    sqafList <- left_join(sqafList, countriesPSR %>% select(OriginID, code), by=c("Origin"="code"))
-    sqafList <- left_join(sqafList, countriesPSR %>% select(AsylumID, code), by=c("Asylum"="code"))
-    
-    after <- nrow(sqafList)
-    
-    if(b4 == after) {
-      print(paste0("Good news - no duplicates added when joining the sqaf list with the country codes; the total number of entries remains: ", after))
-    } else {
-      print(paste0("WARNING: Duplicates added by the join between the sqaf list and the origin / asylum.  Before: ", b4, " and after: ", after, "."))
-    }
-    
-    print(paste0("Origin codes that have no ID: ", paste0(unique(sqafList$Origin[!is.na(sqafList$Origin) & is.na(sqafList$OriginID)]), collapse=", ")))
-    print(paste0("Asylum codes that have no ID: ", paste0(unique(sqafList$Asylum[!is.na(sqafList$Asylum) & is.na(sqafList$AsylumID)]), collapse=", ")))  
 
-        
-    # Ensure that the result, severity and year are all integers
-    sqafList$Year <- as.integer(sqafList$Year)
-    sqafList$Result <- as.integer(sqafList$Result)
-    sqafList$Severity <- as.integer(sqafList$Severity)
-    
-#    View(sqafList)
-        
-    returnValue <- sqafList
-  }
 
 #-------------------------------------------------------------------------------------------------------------------------
 # The rules should be a data frame with the validate structure (name, description and rule)
@@ -478,67 +544,76 @@ RunCategoricalRuleBasedOnPercentage <- function(sqafID, data, doGroupByPT, count
 
 
 #-------------------------------------------------------------------------------------------------------------------------
-# 0.1 Checks that data has been received
-CheckDataReceived <-
+# 0.1 MISSING - Checks that data has been received - i.e. no countries are missing
+CheckDataReceivedMissing <-
   function(sqafID, gr) {
     
+    returnValue <- CheckDataReceived(sqafID, gr, TRUE)    
+  }
+
+#-------------------------------------------------------------------------------------------------------------------------
+# 0.2 UNEXPECTED - Checks whether data has been received from unexpected countries
+CheckDataReceivedUnexpected <-
+  function(sqafID, gr) {
+    
+    returnValue <- CheckDataReceived(sqafID, gr, FALSE)
+  }
+
+
+#-------------------------------------------------------------------------------------------------------------------------
+# Runs the checks for missing or unexpected data
+CheckDataReceived <-
+  function(sqafID, gr, doCheckMissing) {
+    
     currentNumRows <- nrow(sqafList)
+
     
-    # We ignore the "Non-submissions" from these: "AND", "SMA", "VAT"
-    countryList <- c("ABW","AFG","AIA","ALB","ALG","ANG","ANT","ARE","ARG", 
-                     "ARM","AUL","AUS","AZE","BAH","BAR","BDI","BEL","BEN","BER",
-                     "BES","BGD","BHS","BKF","BLR","BOL","BOT","BRA","BRU","BSN",
-                     "BUL","BVI","BZE","CAM","CAN","CAR","CAY","CHD","CHI","CHL",
-                     "CMR","COB","COD","COL","COS","CUB","CUW","CVI","CYP","CZE",
-                     "DEN","DJB","DMA","DOM","ECU","ERT","EST","ETH","FIJ","FIN",
-                     "FRA","FSM","GAB","GAM","GBR","GEO","GFR","GHA","GNB","GRE",
-                     "GRN","GUA","GUI","GUY","HAI","HKG","HON","HRV","HUN","ICE",
-                     "ICO","IND","INS","IRE","IRN","IRQ","ISR","ITA","JAM","JOR",
-                     "JPN","KAZ","KEN","KGZ","KOR","KOS","KUW","LAO","LBR","LBY",
-                     "LCA","LEB","LES","LIE","LKA","LTU","LUX","LVA","MAC","MAD",
-                     "MAU","MCD","MCO","MDA","MEX","MLI","MLS","MLW","MNE","MNG",
-                     "MOR","MOZ","MSR","MTA","MTS","MYA","NAM","NEP","NET","NGR",
-                     "NIC","NIG","NOR","NRU","NZL","OMN","PAK","PAN","PAR","PER",
-                     "PHI","PLW","PNG","POL","POR","QAT","ROM","RSA","RUS","RWA",
-                     "SAL","SAU","SEN","SEY","SIN","SLE","SOL","SOM","SPA",
-                     "SRB","SRV","SSD","STK","SUD","SUR","SVK","SVN","SWA","SWE",
-                     "SWI","SXM","SYR","TAN","TCI","THA","TJK","TKM","TMP","TOG",
-                     "TON","TRT","TUN","TUR","UAE","UGA","UKR","URU","USA","UZB",
-                     "VAN","VCT","VEN","WES","YEM","ZAM","ZIM") 
+    #--1-- Append the data point summaries (we need to package as data frame)
+    AppendDataPointRows(sqafID, data.frame(asylum = sqafCountryList), 1)
     
-    # Strip out the IDMC and UNRWA data
+    
+    #--2-- Strip out the IDMC and UNRWA data
     gr <- gr %>% filter(! populationType %in% c("Total", "IDMC", "UNRWA"))
     
     # get the unique list from the gr dataset
     coaList <- unique(gr$CoA)
     
-    # No need to do an intersect, but lets include it anyway:
-    print(paste0("Found ", length(intersect(coaList,countryList)), " countries of asylum that have submitted data."))
+    #--3-- Test - No need to do an intersect, but lets include it anyway:
+    print(paste0("Found ", length(intersect(coaList, sqafCountryList)), " countries of asylum that have submitted data."))
 
-    missingSubmissions <- setdiff(countryList, coaList)
-    print(paste0("Found ", length(missingSubmissions), " countries of asylum that have MISSING data submissions."))
     
-    incorrectSubmissions <- setdiff(coaList, countryList)
-    print(paste0("Found ", length(incorrectSubmissions), " countries of asylum that have UNEXPECTED data submissions."))
-    
-
-    #--2-- Append the data point summaries (we need to package as data frame)
-    AppendDataPointRows(sqafID, data.frame(asylum = countryList), 2)
-    
-    
-    #--3-- Loop through them and identify any we need to record as messages
+    #--4-- Identify any dodgy data using setDiff
     numViolating <- 0
     
-    # Loop through the missing submissions
-    if( length(missingSubmissions) > 0 ) {
-      for( i in 1 : length(missingSubmissions)) {
+    dodgyData <- data.frame()
+    additionalMessage <- ""
+    
+    if ( doCheckMissing ) {
+      
+      dodgyData <- setdiff(sqafCountryList, coaList)
+      print(paste0("Found ", length(dodgyData), " countries of asylum that have MISSING data submissions."))
+
+      additionalMessage <- paste0("No data has yet been submitted")
+      
+    } else {
+      
+      dodgyData <- setdiff(coaList, sqafCountryList)
+      print(paste0("Found ", length(dodgyData), " countries of asylum that have UNEXPECTED data submissions."))
+      
+      additionalMessage <- paste0("Data has been submitted unexpectedly")
+      
+    }
+    
+    
+    #--5-- Loop through the missing or unexpected data submissions
+    if( length(dodgyData) > 0 ) {
+      for( i in 1 : length(dodgyData)) {
         
-        additionalMessage <- paste0("No data has yet been submitted")
         
         output <- GenerateThresholdAndMessages(
           sqafID,
           NA, 
-          missingSubmissions[i],
+          dodgyData[i],
           NA,
           0,
           additionalMessage
@@ -547,48 +622,22 @@ CheckDataReceived <-
         # Assign the new info to the global list
         AppendSQAFItem(sqafID, output$msgCheck, 
                        0, output$threshold, 
-                       sqafYear, NA, NA, missingSubmissions[i])
+                       sqafYear, NA, NA, dodgyData[i])
         
         
         # And update the number of data points
-        UpdateDataPointRow(sqafID, missingSubmissions[i], output$threshold, 1)
+        UpdateDataPointRow(sqafID, dodgyData[i], output$threshold, 1)
         
         if (output$threshold >= 2) {
           numViolating <- numViolating + 1
         }
         
       }    
-    }
+    }          
+
     
-    # Loop through the incorrect submissions
-    if( length(incorrectSubmissions) > 0 ) {
-      for( i in 1 : length(incorrectSubmissions)) {
-        
-        additionalMessage <- paste0("Data has been submitted unexpectedly")
-        
-        output <- GenerateThresholdAndMessages(
-          sqafID,
-          NA, 
-          incorrectSubmissions[i],
-          NA,
-          0,
-          additionalMessage
-        )
-        
-        # Assign the new info to the global list
-        AppendSQAFItem(sqafID, output$msgCheck, 
-                       0, output$threshold, 
-                       sqafYear, NA, NA, incorrectSubmissions[i])
-        
-        # And update the number of data points
-        UpdateDataPointRow(sqafID, incorrectSubmissions[i], output$threshold, 1)
-        
-        if (output$threshold >= 2) {
-          numViolating <- numViolating + 1
-        }
-        
-      }  
-    }
+    print(paste0("Found ", numViolating, " countres violating the test"))
+    
     
     # Pretty basic success criteria so far - basically that the function successfully adds some rows.
     success <- nrow(sqafList) - currentNumRows > 0
@@ -1825,8 +1874,8 @@ AppendDataPointRow <- function(sqafID, asylum, numberOfSubRules, totalRows) {
     
     # adds the sqafID, asylum code and the total...
     sqafDataPoints[nrow(sqafDataPoints) + 1,] <<- 
-      
-      c(as.character(sqafID), # ID
+      # c - if we include this as a list rather than as a c, then the types are correct
+      list(as.character(sqafID), # ID
         as.character(asylum), # Asylum
         totalMultiplied, # total
         0, 0, 0, 0
@@ -1865,6 +1914,152 @@ UpdateDataPointRow <- function(sqafID, asylum, threshold, count) {
 
 #sqafDataPoints[[as.character("ID")]]
 #sqafDataPoints[[as.character("Total")]][sqafDataPoints$ID == "1.4" & sqafDataPoints$Asylum == "ARM" ][1]
+
+
+#-------------------------------------------------------------------------------------------------------------------------
+# Cleans up the sqaf output to use integers for the years, results and severity, and also converts the country codes
+# and population types to use the lookups included in the refugee-statistics and popdata systems
+StandardiseSQAFList <-
+  function( sqafList) {
+    
+    # Standardise the country names to use IDs which are compatible with the system
+    countriesPSR <- LoadCountryListFromPopulationStatisticsReference()
+    countriesPSR$AsylumID <- countriesPSR$OriginID <- countriesPSR$ID
+    
+    # Then try to join the country list together so we can include the IDs
+    b4 <-nrow(sqafList)
+    
+    sqafList <- left_join(sqafList, countriesPSR %>% select(OriginID, code), by=c("Origin"="code"))
+    sqafList <- left_join(sqafList, countriesPSR %>% select(AsylumID, code), by=c("Asylum"="code"))
+    
+    after <- nrow(sqafList)
+    
+    if(b4 == after) {
+      print(paste0("Good news - no duplicates added when joining the sqaf list with the country codes; the total number of entries remains: ", after))
+    } else {
+      print(paste0("WARNING: Duplicates added by the join between the sqaf list and the origin / asylum.  Before: ", b4, " and after: ", after, "."))
+    }
+    
+    print(paste0("Origin codes that have no ID: ", paste0(unique(sqafList$Origin[!is.na(sqafList$Origin) & is.na(sqafList$OriginID)]), collapse=", ")))
+    print(paste0("Asylum codes that have no ID: ", paste0(unique(sqafList$Asylum[!is.na(sqafList$Asylum) & is.na(sqafList$AsylumID)]), collapse=", ")))  
+    
+    
+    # Ensure that the result, severity and year are all integers
+    # This should no longer be required as we now append data using lists not vectors
+    sqafList$Year <- as.integer(sqafList$Year)
+    sqafList$Result <- as.integer(sqafList$Result)
+    sqafList$Severity <- as.integer(sqafList$Severity)
+    
+    #    View(sqafList)
+    
+    returnValue <- sqafList
+  }
+
+
+
+#-------------------------------------------------------------------------------------------------------------------------
+# Cleans up the sqaf output to use integers for the years, results and severity, and also converts the country codes
+# and population types to use the lookups included in the refugee-statistics and popdata systems
+StandardiseSQAFDataPoints <-
+  function( sqafDataPoints) {
+    
+    # Make sure the dataCube is using integers where it should
+    # This should no longer be required as we now append data using lists not vectors
+    sqafDataPoints$Total <- as.integer(sqafDataPoints$Total)
+    sqafDataPoints$Threshold_1 <- as.integer(sqafDataPoints$Threshold_1)
+    sqafDataPoints$Threshold_2 <- as.integer(sqafDataPoints$Threshold_2)
+    sqafDataPoints$Threshold_3 <- as.integer(sqafDataPoints$Threshold_3)
+    sqafDataPoints$Threshold_4 <- as.integer(sqafDataPoints$Threshold_4)
+    
+    # Generate the delta - i.e. the missing data points that are OK as no test has flagged them.
+    sqafDataPoints$Delta <- sqafDataPoints$Total - 
+      sqafDataPoints$Threshold_1 - sqafDataPoints$Threshold_2 - sqafDataPoints$Threshold_3 - sqafDataPoints$Threshold_4
+    
+    # To Do Check here for negative numbers....
+    
+    
+    
+    # Then we add the delta to Threshold_1
+    sqafDataPoints$Threshold_1 <- sqafDataPoints$Threshold_1 + sqafDataPoints$Delta
+    
+
+    # Check for bad calculations
+    print("Checking for bad calculations")
+    print(unique(sqafDataPoints$ID[sqafDataPoints$Total != 
+                               sqafDataPoints$Threshold_1 + 
+                               sqafDataPoints$Threshold_2 + 
+                               sqafDataPoints$Threshold_3 + 
+                               sqafDataPoints$Threshold_4]))
+    
+    
+    returnValue <- sqafDataPoints
+  }
+
+
+#-------------------------------------------------------------------------------------------------------------------------
+# Produces a summary stacked bar chart of the data
+SQAFSummaryChart <- function(asylumFilter=NA) {
+  
+  #asylumFilter <- "AFG"
+  #asylumFilter <- "MYA"
+  #asylumFilter <- NA
+  
+  #--0--
+  sqafTitle <- "Summary of SQAF checks"
+
+  
+  #--1-- Then we need to normalise the data by first making a copy of the global data
+  sqafDataNarrow <- sqafDataPoints
+  
+  
+  #--2-- If we have a specific asylum code, lets filter on it, and append a note to the tile
+  if ( ! IsNN(asylumFilter) & asylumFilter != "") {
+    sqafDataNarrow <- sqafDataNarrow %>%
+      filter(Asylum == asylumFilter)
+    
+    sqafTitle <- paste0(sqafTitle, " - ", asylumFilter)
+  }
+  
+  
+  #--3-- Then we need to normalise the data and rename the columns
+  sqafDataNarrow <- sqafDataNarrow %>%
+    group_by(ID) %>%
+    summarise(
+#      Total = sum(Total), # No need to include the total here
+      Must_Fix = sum(Threshold_4),
+      Should_Fix = sum(Threshold_3),
+      Could_Fix = sum(Threshold_2),
+      OK = sum(Threshold_1)
+      
+    ) %>%
+    # add the percentages
+    #mutate(
+      #OK = Threshold_1 / Total,
+      #Could_Fix = Threshold_2 / Total,
+      #Should_Fix = Threshold_3 / Total,
+      #Must_Fix = Threshold_4 / Total
+    #) %>%
+    #select( ID, OK, Could_Fix, Should_Fix, Must_Fix ) %>%
+    pivot_longer(!ID, names_to = "Severity", values_to = "Count")
+  
+  
+  #--4-- Then calculate the percentages and the labels
+  sqafDataNarrow <- CalculatePercentageWithLabel(sqafDataNarrow, "ID", NA, "Severity", "Count", 5)
+  
+
+  #--5-- join the titles to the data
+  sqafDataNarrow <- left_join(sqafDataNarrow, sqafSeverityList, by=c("Severity"="Key") )
+  
+  
+  #--6-- Produce the stacked bar chart
+  plotSQAF <- GenerateChartWithStackedBarChart(sqafDataNarrow, "ID", "Percent", "PercentLabel", "Title", 
+                                               sqafColours, 
+                                               sqafTitle, 
+                                               "Source: Gucci SQAF", TRUE) 
+  
+  returnValue <- plotSQAF
+}
+
 
 
 
