@@ -51,19 +51,29 @@ sqafDirectoryName <- paste0(rootOneDriveDirectory, "Data_Quality_Assurance/")
 #-------------------------------------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------------------------
 
-#-----1. Load the source data -----------------------------------------------------------------------------------------------
+#-----1. Load the source data and build the data cube for the PREVIOUS year ----------------------------------------------
+LoadSourceData(sqafYear-1, sqafIsASR)
+grPrevYear <- BuildGR(sqafYear-1, sqafIsASR, FALSE, FALSE)
+
+#-----2. Load the source data and build the data cube for the current year using the end or mid year data ----------------
 LoadSourceData(sqafYear, sqafIsASR)
+BuildDataCube(sqafYear, sqafIsASR)
 
-#-----2. Build the data cube ------------------------------------------------------------------------------------------------
-BuildDataCube()
+#-----3. Build the data cube for the start of the current year -----------------------------------------------------------
+grStartYear <- BuildGR(sqafYear, sqafIsASR, TRUE, FALSE)
 
-#-----3. Load the master data------------------------------------------------------------------------------------------------
+
+View(grPrevYear)
+
+#-----4. Load the master data---------------------------------------------------------------------------------------------
 # Warning this will take a few moments!!
 #LoadAllMasterData()  
 
-#-----4. Load the demographics------------------------------------------------------------------------------------------------
+#-----5. Load the demographics--------------------------------------------------------------------------------------------
 # Note that we don't fix the data here as we want to identify potential issues...
 dataDemographics <- LoadDemographics2020(dataPop, FALSE, FALSE)
+# Add the index so that we can extract the relevant rows for 1.4
+dataDemographics <- dataDemographics %>% mutate(Index = row_number())
 #View(dataDemographics)
 
 # Ensure that the REF table has a PT column
@@ -119,7 +129,7 @@ for( i in 1: nrow(sqafChecks)) {
     
 }
 
-
+View(sqafList)
 
 
 #-------------------------------------------------------------------------------------------------------------------------
@@ -134,7 +144,13 @@ sqafList <- StandardiseSQAFList(sqafList)
 
 
 # Write out the JSON data
-write( toJSON(sqafList), paste0(sqafDirectoryName, "/SQAF_Output.json"))
+write( toJSON(sqafList), paste0(genericDataDirectoryName, "SQAF/SQAF_Output.json"))
+
+# Write out the JSON data for HEXIS
+write( toJSON(sqafList %>% 
+                mutate(PopulationType=PopulationTypeID, Origin=OriginID, Asylum=AsylumID) %>%
+                select(ID, Notes, Result, Severity, Year, PopulationType, Origin, Asylum)), 
+       paste0(genericDataDirectoryName, "SQAF/SQAF_Output_HEXIS.json"))
 
 
 # And write out the lookup of the list of tests (ensuring the ID remains as a character string)
@@ -143,8 +159,13 @@ write( toJSON(
           sqafChecks %>% 
             select(ID, Description) %>% 
             mutate_if(is.numeric, as.character)), 
-       paste0(sqafDirectoryName, "/SQAF_Checks.json"))
+       paste0(genericDataDirectoryName, "SQAF/SQAF_Checks.json"))
 
+# Write out a system update time
+write( toJSON(Sys.time()), paste0(genericDataDirectoryName, "SQAF/SQAF_UpdateDate.json"))
+
+# Write out the severities
+write( toJSON(sqafSeverityList), paste0(genericDataDirectoryName, "SQAF/SQAF_SeverityList.json"))
 
 
 #-------------------------------------------------------------------------------------------------------------------------
@@ -161,6 +182,8 @@ sqafChartWidth <- 175
 sqafChartHeight <- 250
 
 sqafDataPoints <- StandardiseSQAFDataPoints(sqafDataPoints)
+
+#View(sqafDataPoints)
 
 # Test a few charts
 plot(SQAFSummaryChart())
@@ -189,7 +212,27 @@ for( i in 1: length(sqafCountryList)) {
 #-------------------------------------------------------------------------------------------------------------------------
 # Testing .............................
 
+CheckSignificantChange("xxx", gr, grPrevYear)
+
+View(gr)
+View(grPrevYear)
 View(sqafList)
 View(sqafDataPoints)
 
 View(dataRSDFull)
+View(dataDemographics)
+
+#sqafList$Index <- NA
+
+temp <- LoadPopulationTypesFromPopulationStatisticsReference()
+View(temp)
+
+
+View(dataREFROC)
+View(dataOOC)
+View(dataIDP)
+
+grTest <- PreparePopulationData(gr, TRUE, FALSE)
+grTest <- PreparePopulationData(gr, TRUE, TRUE)
+unique(grTest$PT)
+sum(grTest$TotalPopulation[grTest$PT == "IOC"])

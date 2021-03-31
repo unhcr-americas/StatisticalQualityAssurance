@@ -59,11 +59,13 @@ sqafDataPoints <-
 # This is our data structure for the severity
 sqafTitles <- c("OK", "Could Fix", "Should Fix", "Must Fix")
 sqafKeys <- c("OK", "Could_Fix", "Should_Fix", "Must_Fix")
+sqafSeverityList <- c(1, 2, 3, 4)
 sqafColours <- c("#2c8ac1", "#f7bb16", "#e77b37", "#d23f67")
 
 sqafSeverityList <- data.frame(
   # Remember to set the levels as shown in this guide.  This is what enforces the order of the elements
   # https://stackoverflow.com/questions/31638771/r-reorder-levels-of-a-factor-alphabetically-but-one
+  ID = factor(sqafSeverityList),
   # Titles
   Title = factor(sqafTitles, levels=sqafTitles),
   # The keys
@@ -72,7 +74,7 @@ sqafSeverityList <- data.frame(
   # Pretty legend colours
   Legend = sqafColours
 )
-
+sqafSeverityList$ID <- as.integer(sqafSeverityList$ID)
 
 # The list of countries of asylum for which we want to test
 # We ignore the "Non-submissions" from these: "AND", "SMA", "VAT"
@@ -148,9 +150,12 @@ GetDatasetArgumentList <- function(dataToken) {
     
   } else if (dataToken == "All") {
     argStr <- "gr"
+
+  } else if (dataToken == "All-Historic-End") {
+    argStr <- "gr, grPrevYear"
     
-  } else if (dataToken == "All-Historic") {
-    argStr <- "gr, dataPoCs"
+  } else if (dataToken == "All-Historic-Start") {
+    argStr <- "grStartYear, grPrevYear"
     
   }
   
@@ -260,7 +265,7 @@ GenerateThresholdAndMessages <-
 #-------------------------------------------------------------------------------------------------------------------------
 # Modifies the gr (Global report data) to make it compatible with the format needed for these checks
 PreparePopulationData <-
-  function(gr) {
+  function(gr, doRemoveNATRST=TRUE, doRemoveRETRDP=FALSE) {
     
     #--1-- Rename some key fields in the gr dataset to support the use of the CompareDemographicsAndPopulationTotals method
     gr$PT <- gr$populationType
@@ -272,9 +277,20 @@ PreparePopulationData <-
     gr$CoA <- gr$CoO <- gr$ISO3CoO <- gr$ISO3CoA <- gr$populationType <- NULL
     
     # Strip out the IDMC and UNRWA data, totals and naturalisation and resettlement
-    popTypesToRemove <- c("Total", "IDMC", "UNRWA", "NAT", "RST")
-    print(paste0("Preparing the population data and removing population types that are not relevant", paste0(popTypesToRemove, collapse=", ")))
+    #popTypesToRemove <- c("Total", "IDMC", "UNRWA", "NAT", "RST")
+    popTypesToRemove <- c("Total", "IDMC", "UNRWA")
+    print(paste0("Preparing the population data and removing population types that are not relevant: ", paste0(popTypesToRemove, collapse=", ")))
     gr <- gr %>% filter(! PT %in% popTypesToRemove)
+    
+    if ( doRemoveNATRST) {
+      print("Also removing NAT and RST flow data")
+      gr <- gr %>% filter(! PT %in% c("NAT", "RST"))
+    }
+    
+    if ( doRemoveRETRDP) {
+      print("Also removing RET and RDP flow data")
+      gr <- gr %>% filter(! PT %in% c("RDP", "RET"))
+    }
     
     returnValue <- gr
   }
@@ -285,14 +301,26 @@ PreparePopulationData <-
 #-------------------------------------------------------------------------------------------------------------------------
 # The rules should be a data frame with the validate structure (name, description and rule)
 # These rules are 0/1 i.e. they either pass or fail
+# Placeholder columns are columns whose values will be included as an additional column
 RunValidationChecks <-
-  function(sqafID, data, rules, includeOriginInMessage=FALSE) {
+  function(sqafID, data, rules, includeOriginInMessage=FALSE, placeHolderColName=NA, columnNameToIncludeInMessage=NA) {
     
     
     #--0-- Append the data point summaries
     AppendDataPointRows(sqafID, data, nrow(rules))
     
-    # Iterate through the rules and run each on the given dataset
+    #--1-- Deal wih the additional column if it exists
+    if (! IsNN(placeHolderColName)) {
+      print(paste0("Trying to add the placeholder column (", placeHolderColName, ")"))
+      # Create the col if it does not exist
+      if (! DataFrameColumnExists(sqafList, placeHolderColName)) {
+        print("Adding the placeholder column")
+        sqafList[[placeHolderColName]] <<- NA
+      }
+    }
+    
+    
+    #--2-- Iterate through the rules and run each on the given dataset
     for( i in 1 : nrow(rules)) {
       
       ruleListRow <- rules[i,]
@@ -329,6 +357,13 @@ RunValidationChecks <-
               desc <- paste0( desc, " (Origin: ", coo, ")" )
             }
             
+            # Include the value from a specific column if given
+            additionalMessage <- ""
+            if (! IsNN(columnNameToIncludeInMessage)) {
+              desc <- paste0( desc, " (Found: ", dodgyList[[columnNameToIncludeInMessage]][j], ")" )
+            }
+            
+            # Do the usual generating the threshold and messages
             output <- GenerateThresholdAndMessages(
               sqafID,
               coo, 
@@ -336,7 +371,7 @@ RunValidationChecks <-
               popType,
               0,
               desc # Include the description here which is useful especially when there are multiple issues
-              #""
+              
             )
             
             # Check whether the PT, origin and asylum are set - should be handled in AppendSQAFItem?
@@ -345,6 +380,14 @@ RunValidationChecks <-
             AppendSQAFItem(sqafID, output$msgCheck, #output$msgAction, 
                            0, output$threshold, 
                            sqafYear, popType, coo, coa)
+            
+            
+            # If there is a placeholder column defined, then add this with the relevant value to the SQAF list
+            if (! IsNN(placeHolderColName)) {
+              # Then update the last one with the given value
+              sqafList[[placeHolderColName]][nrow(sqafList)] <<- dodgyList[[placeHolderColName]][j]
+            }
+            
             
             # And update the number of data points
             UpdateDataPointRow(sqafID, coa, output$threshold, 1)
@@ -428,7 +471,7 @@ RunRuleBasedOnPercentageByAsylumAndPT <- function(sqafID, data, countColName, ad
 
 
 #-------------------------------------------------------------------------------------------------------------------------
-# Automatically calculated the % occurence of a particular categorical value by country of asylum
+# Automatically calculated the % occurrence of a particular categorical value by country of asylum
 # Optionally also includes the option to additionally filter by PT (populationType)
 RunCategoricalRuleBasedOnPercentage <- function(sqafID, data, doGroupByPT, countColName, filterColName, filterValue, additionalWarningNote="") {
   
@@ -789,22 +832,24 @@ CheckSubNationalCoverage <-
 #-------------------------------------------------------------------------------------------------------------------------
 # 1.4
 CheckDemographicAggregationType <-
-  function(sqafID, dataDemo) {
+  function(sqafID, dd) {
     
     #--0-- Get the current number of rows outputted...
     currentNumRows <- nrow(sqafList)
     
     
+    # These are the ones used by HEXIS, and they are converted to the ones below which are used for the validation
     #validAggregationTypes <- c("Detailed", "M/F and 18-59", "M/F", "Total")
     validAggregationTypes <- c("Default", "18_59", "M_F", "Total")
     
-    
+    #stubAction <- "The aggregation type can be one of four options and the data in each row should conform to the given aggregation type."
     
     # Get the current number of rows outputted...
     currentNumRows <- nrow(sqafList)
     
+    # We need an additional column to store the results of this test
+    #sqafList$Index <- 0
     
-    stubAction <- "The aggregation type can be one of four options and the data in each row should conform to the given aggregation type."
     
     #--1-- We use the validate package to assess this set of rules, so the first step is to build our rules
     
@@ -854,7 +899,7 @@ CheckDemographicAggregationType <-
     
     # M/F    
     r3 <- c( validAggregationTypes[3], # "M_F", #"M/F"
-             "Just disaggregation by sex - The data provided does not match the specified aggregation type", 
+             "Just disaggregation by sex - The data provided does not match the specified aggregation type (check that the totals are also included in the male and female unknown age cohort columns)", 
              
              "total==(totalFemaleTotal + totalMaleTotal) &
              
@@ -893,25 +938,71 @@ CheckDemographicAggregationType <-
     )
     ruleList <- rbind(ruleList, r4)
     
-    # Now iterate through the rules and filter the data, then confront only the filtered data
+    
+    #--2-- Now iterate through the rules and filter the data, then confront only the filtered data
     for( i in 1 : nrow(ruleList)) {
       
       ruleListRow <- as.data.frame( ruleList[i,] )
       
       # Filter the data as long as the given name is a valid aggregation type (otherwise just test the full cube)
       if ( ruleListRow$name %in% validAggregationTypes ) {
-        dataSubSet <- dataDemo %>% filter(AggregationType == ruleListRow$name)
+        dataSubSet <- dd %>% filter(AggregationType == ruleListRow$name)
       } else {
-        dataSubSet <- dataDemo
+        dataSubSet <- dd
       }
       
       # Then run this test and log the results
-      RunValidationChecks(sqafID, dataSubSet, ruleListRow)
+      # Note that we want to include the index in the sqaf outputs below to make it possible to link between them
+      RunValidationChecks(sqafID, dataSubSet, ruleListRow, placeHolderColName = "Index")
       
       
     }
     
-    # Pretty basic success criteria so far - basically that the function successfully adds some rows.
+    #--3-- To improve the message, we need to now go through all the 1.4's in the sqafList and append the actual aggregation type to the error
+    # Note that the info provided is not unique - i.e. there could be multiple rows for an origin, asylum and PT... but the number
+    # of rows should be consistent, so we should be able to append
+    list14 <- sqafList %>% filter(ID == sqafID )
+    
+    if(nrow(list14) > 0) {
+      print(paste0("Updating the notes for  ", nrow(list14), " logical checks." ))        
+      Sys.sleep(3)
+            
+      
+      #--3a-- Then append the aggregation type to the data
+      origAggType <- "AggTypeOriginal"
+      dd <- AppendAggregationType(dd, TRUE, origAggType)
+      
+      #--3b-- HEXIFY the aggregation type to make it relevant to PopData
+      dd <- ConvertAggregationType(dd, FALSE, origAggType)
+      
+#View(dd)      
+      #--3c-- Loop through them and update the notes
+      for( i in 1 : nrow(list14)) {
+        
+        # Store the variables
+        index <- list14$Index[i]
+        ori <- list14$Origin[i]
+        asy <- list14$Asylum[i]
+        pt <- list14$PopulationType[i]
+        note <- list14$Notes[i]
+
+        # Give a process statement
+        #print(paste0("Processing ", index, " ", ori, " ", asy, " ", pt ))        
+        
+        # Extract the actual aggregation type from the dd using the index
+        # Note that we want the HEXIS / PopData type of aggregation not the UNHCR one.
+        actualAggType <- dd$typeOfAggregation[dd$Index == index]
+        
+        # And build the notes field
+        note <- paste0( note, " The data provided has an actual aggregation type of '", actualAggType, "'")
+        
+        # Then overwrite the relevant notes
+        sqafList$Notes[sqafList$Index == index] <<- note
+      }
+    }
+    
+    
+    #--4-- Pretty basic success criteria so far - basically that the function successfully adds some rows.
     success <- nrow(sqafList) - currentNumRows > 0
     returnValue <- success  
     
@@ -1556,36 +1647,139 @@ CheckHostCommunity <- function(sqafID, dataHST, isASR) {
   
 }
 
+
 #-------------------------------------------------------------------------------------------------------------------------
-# 8.1
-CheckSignificantChange <- function(sqafID, dataLatest, dataHistoric) {
+# 8.1 and 8.2 - Compares the end of the previous year with the _end_ of the current year
+CheckSignificantChangeBase <- function(sqafID, data2, data1, filterThreshold=1) {
+  
+  #--0a-- Append the data point summaries
+  AppendDataPointRows(sqafID, data2, 1)
   
   # Get the current number of rows outputted...
   currentNumRows <- nrow(sqafList)
   
-  print("!!! NOT YET IMPLEMENTED !!!")
+  # Then do a full join whopper!
+  dc <- full_join(data1 %>% 
+                    mutate(T1=TotalPopulation) %>% 
+                    select(origin, asylum, PT, T1), 
+                  data2 %>%
+                    mutate(T2=TotalPopulation) %>% 
+                    select(origin, asylum, PT, T2), by=c("origin"="origin", "asylum"="asylum", "PT"="PT"))
+  
+  # convert the NAs to zeros (not ideal but seems to be an OK compromise for now)
+  dc[is.na(dc)] <- 0
+  
+  # Then strip out the small numbers defined as < 1000 in at least one of the time periods
+  if ( filterThreshold > 0) {
+    dc <- dc %>% filter(T1 >= filterThreshold | T2 >= filterThreshold)
+  }
+  
+  dc$Diff <- dc$T2 - dc$T1
+  dc$Perc <- dc$Diff / dc$T1 * 100
+  
+  
+  # Catch infinite percentages
+  dc$Perc <- ifelse(is.infinite(dc$Perc), 1000000, dc$Perc)
+  # clean it up
+  dc$Perc <- as.integer(round(dc$Perc, 0))
+  
+#  View(dc)    
+  
+  # Produce the output
+  print(paste0("Processing ", nrow(dc), " records..."))
+  
+  numViolating <- 0
+  
+  for( i in 1 : nrow(dc)) {
+    
+    
+    #--3c-- We need to absolutify the diff so that the error messages are generated correctly
+    output <- GenerateThresholdAndMessages(
+      sqafID,
+      dc$origin[i], 
+      dc$asylum[i],
+      dc$PT[i],
+      abs(dc$Perc[i])
+    )
+    
+    # Lets build the custom message here
+    msg <- paste0( "When comparing between the two reference points, there is a difference of ", 
+                   PrettyNum(dc$Diff[i])," (", dc$Perc[i],"%) i.e. previously ", 
+                   PrettyNum(dc$T1[i])," and now ", 
+                   PrettyNum(dc$T2[i]),"." )
+    
+    if (dc$PT[i] == "STA") {
+      msg <- paste0( msg, " This could be due to the reclassification of the stateless data to use the origin from the former habitual residence.")
+      # Ensure the lowest level of error message is generated
+      output$threshold = 2
+    }
+    
+
+    # Check there has been reporting for this PT and asylum
+    reportedTotalByPTAndAsylum <- sum(data2$TotalPopulation[data2$asylum == dc$asylum[i] & data2$PT == dc$PT[i] ])
+    
+    # If the reportedTotal is zero then lets downgrade the error (as it's just due to lack of reporting)
+    if ( reportedTotalByPTAndAsylum == 0) {
+      output$threshold = 1
+    }
+    
+    # If this is not just for information lets log it in the list
+    if ( output$threshold >= 2) {
+      
+      
+      # Assign the new info to the global list - in this instance ignore the "for information" checks
+      AppendSQAFItem(sqafID, msg, 
+                     dc$Perc[i], output$threshold, 
+                     sqafYear, dc$PT[i], dc$origin[i], dc$asylum[i])
+      
+      
+      
+      numViolating <- numViolating + 1
+    }
+    
+    
+    # And ALWAYS update the number of data points
+    UpdateDataPointRow(sqafID, dc$asylum[i], output$threshold, 1)
+    
+  }  
+  
+  print(paste0("Found ", numViolating, " (by countries of origin and asylum and population type) violating the test"))
+  
+  
+  
+  
   
   # Pretty basic success criteria so far - basically that the function successfully adds some rows.
-  #success <- nrow(sqafList) - currentNumRows > 0
-  #returnValue <- success  
-  returnValue <- TRUE
+  success <- nrow(sqafList) - currentNumRows > 0
+  returnValue <- success  
   
 }
 
 #-------------------------------------------------------------------------------------------------------------------------
-# 8.2
-CheckStartEndChange <- function(sqafID, dataLatest, dataHistoric) {
+# 8.1 - Compares the end of the previous year with the _end_ of the current year
+CheckSignificantChange <- function(sqafID, dataLatest, dataPreviousYear) {
+
+  # So essentially we have two big gr datacubes
+  # So filter out irrelevant comparisons (Total, IDMC and UNRWA) - for the comparison with the previous year we can keep all the flow data
+  dataLatest <- PreparePopulationData(dataLatest, FALSE, FALSE)
+  dataPreviousYear <- PreparePopulationData(dataPreviousYear, FALSE, FALSE)
   
-  # Get the current number of rows outputted...
-  currentNumRows <- nrow(sqafList)
   
-  print("!!! NOT YET IMPLEMENTED !!!")
+  returnValue <- CheckSignificantChangeBase(sqafID, dataLatest, dataPreviousYear, 1000)
   
-  # Pretty basic success criteria so far - basically that the function successfully adds some rows.
-  #success <- nrow(sqafList) - currentNumRows > 0
-  #returnValue <- success  
-  returnValue <- TRUE
+}
+
+#-------------------------------------------------------------------------------------------------------------------------
+# 8.2 - Compares the end of the previous year with the _start_ of the current year
+CheckStartEndChange <- function(sqafID, dataStartYear, dataPreviousYear) {
   
+
+  # So filter out irrelevant comparisons (Total, IDMC and UNRWA) - for the comparison with the start year we have to remove all the flow data
+  dataPreviousYear <- PreparePopulationData(dataPreviousYear, TRUE, TRUE)
+  dataStartYear <- PreparePopulationData(dataStartYear, TRUE, TRUE)
+  
+  # We use the default threshold of 1 for this more sensitive check
+  returnValue <- CheckSignificantChangeBase(sqafID, dataStartYear, dataPreviousYear)  
 }
 
 
@@ -1834,6 +2028,38 @@ CheckCountryCodes <- function(sqafID, gr) {
 
 
 #-------------------------------------------------------------------------------------------------------------------------
+# 9.7 Checks for negative numbers in the population data
+CheckNegativeNumbers <- function(sqafID, gr) {
+  
+  # Get the current number of rows outputted...
+  currentNumRows <- nrow(sqafList)
+  
+  # Standardise the column names and strip out the IDMC and UNRWA data
+  gr <- PreparePopulationData(gr)
+  
+#View(gr)  
+  
+  # Add the rule
+  ruleList <- data.frame( 
+    name = "Negative numbers should not be present",
+    description = "Negative numbers are invalid in the population statistics country of asylum", 
+    rule = paste0("TotalPopulation >= 0")
+    
+  )
+  
+
+  # Then run the checks...
+  RunValidationChecks(sqafID, gr, ruleList, columnNameToIncludeInMessage="TotalPopulation")  
+  
+  # Pretty basic success criteria so far - basically that the function successfully adds some rows.
+  success <- nrow(sqafList) - currentNumRows > 0
+  returnValue <- success  
+  
+}
+
+
+
+#-------------------------------------------------------------------------------------------------------------------------
 # Appends the row with the total data points
 AppendDataPointRows <- function(sqafID, data, numberOfSubRules) {
   
@@ -1926,18 +2152,26 @@ StandardiseSQAFList <-
     countriesPSR <- LoadCountryListFromPopulationStatisticsReference()
     countriesPSR$AsylumID <- countriesPSR$OriginID <- countriesPSR$ID
     
+    # And load the population types too
+    ptPSR <- LoadPopulationTypesFromPopulationStatisticsReference()
+    ptPSR$PopulationTypeID <- ptPSR$id
+    
     # Then try to join the country list together so we can include the IDs
     b4 <-nrow(sqafList)
     
+    # The country IDs for origin and asylum
     sqafList <- left_join(sqafList, countriesPSR %>% select(OriginID, code), by=c("Origin"="code"))
     sqafList <- left_join(sqafList, countriesPSR %>% select(AsylumID, code), by=c("Asylum"="code"))
+    
+    # And the population types for the PT
+    sqafList <- left_join(sqafList, ptPSR %>% select(code, PopulationTypeID), by=c("PopulationType"="code"))
     
     after <- nrow(sqafList)
     
     if(b4 == after) {
-      print(paste0("Good news - no duplicates added when joining the sqaf list with the country codes; the total number of entries remains: ", after))
+      print(paste0("Good news - no duplicates added when joining the sqaf list with the country and population type codes; the total number of entries remains: ", after))
     } else {
-      print(paste0("WARNING: Duplicates added by the join between the sqaf list and the origin / asylum.  Before: ", b4, " and after: ", after, "."))
+      print(paste0("WARNING: Duplicates added by the join between the sqaf list, population types and the country codes for origin / asylum.  Before: ", b4, " and after: ", after, "."))
     }
     
     print(paste0("Origin codes that have no ID: ", paste0(unique(sqafList$Origin[!is.na(sqafList$Origin) & is.na(sqafList$OriginID)]), collapse=", ")))
@@ -2048,9 +2282,9 @@ SQAFSummaryChart <- function(asylumFilter=NA) {
   
 
   #--5-- join the titles to the data
-  sqafDataNarrow <- left_join(sqafDataNarrow, sqafSeverityList, by=c("Severity"="Key") )
+  sqafDataNarrow <- left_join(sqafDataNarrow, sqafSeverityList %>% select(Key, Title, Legend), by=c("Severity"="Key") )
   
-  
+#View(sqafDataNarrow)  
   #--6-- Produce the stacked bar chart
   plotSQAF <- GenerateChartWithStackedBarChart(sqafDataNarrow, "ID", "Percent", "PercentLabel", "Title", 
                                                sqafColours, 
