@@ -77,27 +77,31 @@ sqafSeverityList <- data.frame(
 sqafSeverityList$ID <- as.integer(sqafSeverityList$ID)
 
 # The list of countries of asylum for which we want to test
-# We ignore the "Non-submissions" from these: "AND", "SMA", "VAT"
-sqafCountryList <- c("ABW","AFG","AIA","ALB","ALG","ANG","ANT","ARE","ARG", 
-                 "ARM","AUL","AUS","AZE","BAH","BAR","BDI","BEL","BEN","BER",
-                 "BES","BGD","BHS","BKF","BLR","BOL","BOT","BRA","BRU","BSN",
-                 "BUL","BVI","BZE","CAM","CAN","CAR","CAY","CHD","CHI","CHL",
-                 "CMR","COB","COD","COL","COS","CUB","CUW","CVI","CYP","CZE",
-                 "DEN","DJB","DMA","DOM","ECU","ERT","EST","ETH","FIJ","FIN",
-                 "FRA","FSM","GAB","GAM","GBR","GEO","GFR","GHA","GNB","GRE",
-                 "GRN","GUA","GUI","GUY","HAI","HKG","HON","HRV","HUN","ICE",
-                 "ICO","IND","INS","IRE","IRN","IRQ","ISR","ITA","JAM","JOR",
-                 "JPN","KAZ","KEN","KGZ","KOR","KOS","KUW","LAO","LBR","LBY",
-                 "LCA","LEB","LES","LIE","LKA","LTU","LUX","LVA","MAC","MAD",
-                 "MAU","MCD","MCO","MDA","MEX","MLI","MLS","MLW","MNE","MNG",
-                 "MOR","MOZ","MSR","MTA","MTS","MYA","NAM","NEP","NET","NGR",
-                 "NIC","NIG","NOR","NRU","NZL","OMN","PAK","PAN","PAR","PER",
-                 "PHI","PLW","PNG","POL","POR","QAT","ROM","RSA","RUS","RWA",
-                 "SAL","SAU","SEN","SEY","SIN","SLE","SOL","SOM","SPA",
-                 "SRB","SRV","SSD","STK","SUD","SUR","SVK","SVN","SWA","SWE",
-                 "SWI","SXM","SYR","TAN","TCI","THA","TJK","TKM","TMP","TOG",
-                 "TON","TRT","TUN","TUR","UAE","UGA","UKR","URU","USA","UZB",
-                 "VAN","VCT","VEN","WES","YEM","ZAM","ZIM") 
+# We ignore the "Non-submissions" from these countries in Europe: "AND", "SMA", "VAT", 
+# And these ones from the Americas: "BER", "MSR", "BVI", "BES" (Bonaire so technically Europe)
+# And these ones from Asia: "FSM", "PLW", "TMP"
+# And these ones from Africa: "SEY"
+sqafCountryList <- c(
+                  "ABW","AFG","AIA","ALB","ALG","ANG","ANT","ARE","ARG","ARM",
+                  "AUL","AUS","AZE","BAH","BAR","BDI","BEL","BEN","BGD",
+                  "BHS","BKF","BLR","BOL","BOT","BRA","BRU","BSN","BUL","BZE",
+                  "CAM","CAN","CAR","CAY","CHD","CHI","CHL","CMR","COB","COD",
+                  "COL","COS","CUB","CUW","CVI","CYP","CZE","DEN","DJB","DMA",
+                  "DOM","ECU","ERT","EST","ETH","FIJ","FIN","FRA","GAB","GAM",
+                  "GBR","GEO","GFR","GHA","GNB","GRE","GRN","GUA","GUI","GUY",
+                  "HAI","HKG","HON","HRV","HUN","ICE","ICO","IND","INS","IRE",
+                  "IRN","IRQ","ISR","ITA","JAM","JOR","JPN","KAZ","KEN","KGZ",
+                  "KOR","KOS","KUW","LAO","LBR","LBY","LCA","LEB","LES","LIE",
+                  "LKA","LTU","LUX","LVA","MAC","MAD","MAU","MCD","MCO","MDA",
+                  "MEX","MLI","MLS","MLW","MNE","MNG","MOR","MOZ","MTA","MTS",
+                  "MYA","NAM","NEP","NET","NGR","NIC","NIG","NOR","NRU","NZL",
+                  "OMN","PAK","PAN","PAR","PER","PHI","PNG","POL","POR",
+                  "QAT","ROM","RSA","RUS","RWA","SAL","SAU","SEN","SIN","SLE",
+                  "SOL","SOM","SPA","SRB","SRV","SSD","STK","SUD","SUR","SVK",
+                  "SVN","SWA","SWE","SWI","SXM","SYR","TAN","TCI","THA","TJK",
+                  "TKM","TOG","TON","TRT","TUN","TUR","UAE","UGA","UKR",
+                  "URU","USA","UZB","VAN","VCT","VEN","WES","YEM","ZAM","ZIM"
+                  ) 
 
 
 #-------------------------------------------------------------------------------------------------------------------------
@@ -265,7 +269,7 @@ GenerateThresholdAndMessages <-
 #-------------------------------------------------------------------------------------------------------------------------
 # Modifies the gr (Global report data) to make it compatible with the format needed for these checks
 PreparePopulationData <-
-  function(gr, doRemoveNATRST=TRUE, doRemoveRETRDP=FALSE) {
+  function(gr, doRemoveNATRST=TRUE, doRemoveRETRDP=FALSE, doRemoveDuplicates=FALSE) {
     
     #--1-- Rename some key fields in the gr dataset to support the use of the CompareDemographicsAndPopulationTotals method
     gr$PT <- gr$populationType
@@ -290,6 +294,11 @@ PreparePopulationData <-
     if ( doRemoveRETRDP) {
       print("Also removing RET and RDP flow data")
       gr <- gr %>% filter(! PT %in% c("RDP", "RET"))
+    }
+    
+    # And then also remove duplicates if requested
+    if( doRemoveDuplicates) {
+      gr <- gr %>% filter(IsDuplicate == "")
     }
     
     returnValue <- gr
@@ -863,6 +872,7 @@ CheckDemographicAggregationType <-
     )
     
     #"Default", # Detailed
+    # Added check that the detailed adult categories match the generic 18-59 category
     r1 <- c( validAggregationTypes[1], 
              "Detailed adult age cohorts - the data provided does not match the specified aggregation type",
              
@@ -870,8 +880,14 @@ CheckDemographicAggregationType <-
              
              totalFemaleTotal==(totalFemale_0_4 + totalFemale_5_11 + totalFemale_12_17 + 
              totalFemale_18_24 + totalFemale_25_49 + totalFemale_50_59 + totalFemale_60 + Female_Unknown) &
+             
+             totalFemale_18_59 == totalFemale_18_24 + totalFemale_25_49 + totalFemale_50_59 &
+             
              totalMaleTotal==(totalMale_0_4 + totalMale_5_11 + totalMale_12_17 + 
-             totalMale_18_24 + totalMale_25_49 + totalMale_50_59 + totalMale_60 + Male_Unknown)"
+             totalMale_18_24 + totalMale_25_49 + totalMale_50_59 + totalMale_60 + Male_Unknown) &
+             
+             totalMale_18_59 == totalMale_18_24 + totalMale_25_49 + totalMale_50_59
+             "
              
     )
     ruleList <- rbind(ruleList, r1)
@@ -881,19 +897,19 @@ CheckDemographicAggregationType <-
     r2 <- c( validAggregationTypes[2], # "18_59", # "M/F and 18-59"
              "Just the 18-59 adult age cohort - the data provided does not match the specified aggregation type",
              
-             "total==(totalFemaleTotal + totalMaleTotal) &
+             "total > 0 &
+             total==(totalFemaleTotal + totalMaleTotal) &
              
              totalFemale_18_24 == 0 & totalFemale_25_49 == 0 & totalFemale_50_59 == 0 &
              totalMale_18_24 == 0 & totalMale_25_49 == 0 & totalMale_50_59 == 0 &
-             
-             (totalFemale_18_59 > 0 | totalMale_18_59 > 0) &
              
              totalFemaleTotal==(totalFemale_0_4 + totalFemale_5_11 + totalFemale_12_17 + 
              totalFemale_18_59 + totalFemale_60 + Female_Unknown) &  
              
              totalMaleTotal==(totalMale_0_4 + totalMale_5_11 + totalMale_12_17 + 
              totalMale_18_59 + totalMale_60 + Male_Unknown)"
-             
+            # Note 1 -  Removed this as this wrongly filters out children: (totalFemale_18_59 > 0 | totalMale_18_59 > 0) &             
+            # Note 2 -  Added a total > 0 check
     )
     ruleList <- rbind(ruleList, r2)
     
@@ -1089,6 +1105,104 @@ CheckDemographicUrbanRural <- function(sqafID, dataDemo) {
 }
 
 
+#-------------------------------------------------------------------------------------------------------------------------
+# 1.8
+CheckDemographicEstimation <- function(sqafID, dataDemo) {
+  
+  #--0-- Get the current number of rows outputted...
+  currentNumRows <- nrow(sqafList)
+  
+  #--1-- Get the relevant sqaf check
+  sqafCheck <- sqafChecks[sqafChecks$ID == sqafID,]
+  
+  
+  #--2-- Filter the data down to remove totals and zeros, then summarise by asylum and PT
+  dataDemoFiltered <- dataDemo %>% 
+    filter(AggregationType != "Total" & total > 0) %>%
+    group_by(asylum, PT) %>%
+    summarise(
+      total = sum(total),
+      totalMaleTotal = sum(totalMaleTotal)
+    )
+  # Then calc the %male...
+  dataDemoFiltered$MalePercent <- dataDemoFiltered$totalMaleTotal / dataDemoFiltered$total * 100
+  
+#View(dataDemoFiltered)  
+
+  
+  # Basis should be one of R, V, E, C (should not be blank and estimates less desirable)
+  ruleList <- data.frame( 
+    name = sqafCheck$Description,
+    description = sqafCheck$Explanation, 
+    rule = paste0("! round(MalePercent, 3) %in% c(49.000, 50.000, 51.000)")
+    
+  )
+  
+  # Only run this on the STA origin records
+  RunValidationChecks(sqafID, dataDemoFiltered, ruleList)
+  
+  
+  #--3-- Pretty basic success criteria so far - basically that the function successfully adds some rows.
+  success <- nrow(sqafList) - currentNumRows > 0
+  returnValue <- success  
+}
+
+#-------------------------------------------------------------------------------------------------------------------------
+# 1.9
+CheckStatelessStatus1 <- function(sqafID, dataDemo) {
+  
+  #--0-- Get the current number of rows outputted...
+  currentNumRows <- nrow(sqafList)
+  
+  #--1-- Get the relevant sqaf check
+  sqafCheck <- sqafChecks[sqafChecks$ID == sqafID,]
+  
+  #--2-- Filter the data to just the STA origins that are not stateless population types (these latter ones are covered in the next test)
+  dataDemoFiltered <- dataDemo %>% filter(origin == "STA" & PT != "STA" & total > 0)
+
+  # Set the rule
+  ruleList <- data.frame( 
+    name = sqafCheck$Description,
+    description = sqafCheck$Explanation, 
+    rule = paste0("origin == 'STA' & statelessStatus == 'STL'")
+    
+  )
+  
+  # Only run this on the STA origin records
+  RunValidationChecks(sqafID, dataDemoFiltered, ruleList)
+    
+  #--3-- Pretty basic success criteria so far - basically that the function successfully adds some rows.
+  returnValue <- nrow(sqafList) - currentNumRows > 0
+
+}
+
+#-------------------------------------------------------------------------------------------------------------------------
+# 1.11
+CheckStatelessStatus2 <- function(sqafID, dataDemo) {
+  
+  #--0-- Get the current number of rows outputted...
+  currentNumRows <- nrow(sqafList)
+  
+  #--1-- Get the relevant sqaf check
+  sqafCheck <- sqafChecks[sqafChecks$ID == sqafID,]
+  
+  #--2-- Filter the data to just the STA PT
+  dataDemoFiltered <- dataDemo %>% filter(PT == "STA" & total > 0)
+  
+  # Set the rule
+  ruleList <- data.frame( 
+    name = sqafCheck$Description,
+    description = sqafCheck$Explanation, 
+    rule = paste0("PT == 'STA' & statelessStatus %in% c('STL', 'UDN', 'NDP')")
+  )
+  
+  # Only run this on the STA origin records
+  RunValidationChecks(sqafID, dataDemoFiltered, ruleList)
+  
+  #--3-- Pretty basic success criteria so far - basically that the function successfully adds some rows.
+  returnValue <- nrow(sqafList) - currentNumRows > 0
+  
+}
 
 
 #-------------------------------------------------------------------------------------------------------------------------
@@ -1180,12 +1294,14 @@ CheckDemographicTotals <- function(sqafID, dataDemo, gr, dataREFROC, dataRET, is
   currentNumRows <- nrow(sqafList)
 
   #--1-- Rename some key fields in the gr dataset to support the use of the CompareDemographicsAndPopulationTotals method
-  gr <- PreparePopulationData(gr)
+  # Note that for this comparison we want to additionally remove the duplicates
+  gr <- PreparePopulationData(gr, doRemoveDuplicates=TRUE)
 
   #--2-- Extract the returns - !!IMPORTANT!!
   # For this comparison to be effective, we need the origin returns only, not the fancy maximum calculation.
   # hence we need to strip out the fancy Returns data, and add in our gucci data...
-  dataReturns <- CompareRefugeeReturns(dataREFROC, dataRET, isASR )
+  # We also want to ensure that the country codes are not standardised here - to avoid imprecision with e.g. KOS<>SRB
+  dataReturns <- CompareRefugeeReturns(dataREFROC, dataRET, isASR, doCountryCodeStandardisation=FALSE )
   
   # Then simplify the dataReturns and merge it with the gr data
   dataReturns <- dataReturns %>% select(origin, asylum, populationType, RETPopulation, RETAssisted, IsDuplicate)
@@ -1658,13 +1774,25 @@ CheckSignificantChangeBase <- function(sqafID, data2, data1, filterThreshold=1) 
   # Get the current number of rows outputted...
   currentNumRows <- nrow(sqafList)
   
+  # Update all Stateless to have an origin of STA; otherwise we get too many false positives in churn with this test
+  data1$origin[data1$PT == "STA"] <- "STA"
+  data2$origin[data2$PT == "STA"] <- "STA"
+  
+  # Then summarise and group the datasets
+  data1 <- data1 %>% 
+    mutate(T1=TotalPopulation) %>% 
+    select(origin, asylum, PT, T1) %>%
+    group_by(origin, asylum, PT) %>%
+    summarise(T1 = sum(T1))
+  
+  data2 <- data2 %>%
+    mutate(T2=TotalPopulation) %>% 
+    select(origin, asylum, PT, T2) %>%
+    group_by(origin, asylum, PT) %>%
+    summarise(T2 = sum(T2))
+  
   # Then do a full join whopper!
-  dc <- full_join(data1 %>% 
-                    mutate(T1=TotalPopulation) %>% 
-                    select(origin, asylum, PT, T1), 
-                  data2 %>%
-                    mutate(T2=TotalPopulation) %>% 
-                    select(origin, asylum, PT, T2), by=c("origin"="origin", "asylum"="asylum", "PT"="PT"))
+  dc <- full_join(data1, data2, by=c("origin"="origin", "asylum"="asylum", "PT"="PT"))
   
   # convert the NAs to zeros (not ideal but seems to be an OK compromise for now)
   dc[is.na(dc)] <- 0
@@ -1683,7 +1811,7 @@ CheckSignificantChangeBase <- function(sqafID, data2, data1, filterThreshold=1) 
   # clean it up
   dc$Perc <- as.integer(round(dc$Perc, 0))
   
-#  View(dc)    
+#View(dc)    
   
   # Produce the output
   print(paste0("Processing ", nrow(dc), " records..."))
@@ -1708,7 +1836,7 @@ CheckSignificantChangeBase <- function(sqafID, data2, data1, filterThreshold=1) 
                    PrettyNum(dc$T1[i])," and now ", 
                    PrettyNum(dc$T2[i]),"." )
     
-    if (dc$PT[i] == "STA") {
+    if (dc$PT[i] == "STA" & output$threshold >= 2) {
       msg <- paste0( msg, " This could be due to the reclassification of the stateless data to use the origin from the former habitual residence.")
       # Ensure the lowest level of error message is generated
       output$threshold = 2
@@ -1716,7 +1844,7 @@ CheckSignificantChangeBase <- function(sqafID, data2, data1, filterThreshold=1) 
     
 
     # Check there has been reporting for this PT and asylum
-    reportedTotalByPTAndAsylum <- sum(data2$TotalPopulation[data2$asylum == dc$asylum[i] & data2$PT == dc$PT[i] ])
+    reportedTotalByPTAndAsylum <- sum(data2$T2[data2$asylum == dc$asylum[i] & data2$PT == dc$PT[i] ])
     
     # If the reportedTotal is zero then lets downgrade the error (as it's just due to lack of reporting)
     if ( reportedTotalByPTAndAsylum == 0) {

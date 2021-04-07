@@ -52,18 +52,23 @@ sqafDirectoryName <- paste0(rootOneDriveDirectory, "Data_Quality_Assurance/")
 #-------------------------------------------------------------------------------------------------------------------------
 
 #-----1. Load the source data and build the data cube for the PREVIOUS year ----------------------------------------------
-LoadSourceData(sqafYear-1, sqafIsASR)
-grPrevYear <- BuildGR(sqafYear-1, sqafIsASR, FALSE, FALSE)
+LoadSourceData(sqafYear-1, sqafIsASR, doCountryCodeStandardisation=FALSE)
+grPrevYear <- BuildGR(sqafYear-1, sqafIsASR, FALSE, FALSE, doCountryCodeStandardisation=FALSE)
 
-#-----2. Load the source data and build the data cube for the current year using the end or mid year data ----------------
-LoadSourceData(sqafYear, sqafIsASR)
-BuildDataCube(sqafYear, sqafIsASR)
+#-----2. Load the source data for the current year using the end or mid year data ----------------
+LoadSourceData(sqafYear, sqafIsASR, doCountryCodeStandardisation=FALSE)
 
 #-----3. Build the data cube for the start of the current year -----------------------------------------------------------
-grStartYear <- BuildGR(sqafYear, sqafIsASR, TRUE, FALSE)
+grStartYear <- BuildGR(sqafYear, sqafIsASR, TRUE, FALSE, doCountryCodeStandardisation=FALSE)
 
+#-----4. Build the data cube for the current year using the end or mid year data ----------------
+BuildDataCube(sqafYear, sqafIsASR, doCountryCodeStandardisation=FALSE)
 
-View(grPrevYear)
+# Ensure that the REF table has a PT column
+dataREFROC$PT <- dataREFROC$populationType
+
+#View(dataRET)
+#View(grPrevYear)
 
 #-----4. Load the master data---------------------------------------------------------------------------------------------
 # Warning this will take a few moments!!
@@ -71,13 +76,11 @@ View(grPrevYear)
 
 #-----5. Load the demographics--------------------------------------------------------------------------------------------
 # Note that we don't fix the data here as we want to identify potential issues...
-dataDemographics <- LoadDemographics2020(dataPop, FALSE, FALSE)
+dataDemographics <- LoadDemographics2020(dataPop, FALSE, FALSE, doCountryCodeStandardisation=FALSE)
 # Add the index so that we can extract the relevant rows for 1.4
 dataDemographics <- dataDemographics %>% mutate(Index = row_number())
 #View(dataDemographics)
 
-# Ensure that the REF table has a PT column
-dataREFROC$PT <- dataREFROC$populationType
 
 
 #-------------------------------------------------------------------------------------------------------------------------
@@ -131,6 +134,7 @@ for( i in 1: nrow(sqafChecks)) {
 
 View(sqafList)
 
+#View(dataDemographics)
 
 #-------------------------------------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------------------------
@@ -222,10 +226,14 @@ View(sqafDataPoints)
 View(dataRSDFull)
 View(dataDemographics)
 
+View(dataHST)
+
 #sqafList$Index <- NA
 
 temp <- LoadPopulationTypesFromPopulationStatisticsReference()
 View(temp)
+
+View(dataRSD)
 
 
 View(dataREFROC)
@@ -236,3 +244,22 @@ grTest <- PreparePopulationData(gr, TRUE, FALSE)
 grTest <- PreparePopulationData(gr, TRUE, TRUE)
 unique(grTest$PT)
 sum(grTest$TotalPopulation[grTest$PT == "IOC"])
+
+
+tempDemo <- dataDemographics %>% filter(asylum == "GAB" & PT == "ASY" & origin %in% c("EGU", "CAR"))
+View(tempDemo)
+
+
+#-----6. And then build the data cube to compare to the demographics -----------------------------------------------------
+dataPop <- BuildPopDataCubeToCompareToDemographics(dataRSD, dataRDP, dataRET, dataIDP, dataREFROC, dataSTAFull, dataOOCFull, dataVDA, dataHST, FALSE)
+
+View(dataRDP)
+View(dataIDP)
+tempDataIDPIOC <- ReadCSVTable(workingDirectoryName, fnIDP, ";") 
+View(tempDataIDPIOC)
+tempSum <- tempDataIDPIOC %>% filter(type == "IDPD") %>% group_by(origin) %>% summarise(Count=sum(totalMidYear))
+View(tempSum)
+sum(dataDemographics$total[dataDemographics$origin == "MYA" & dataDemographics$asylum == "BGD" & grep("camp", dataDemographics$location, perl=T)])
+#dataDemographics <- AppendAggregationType(dataDemographics, TRUE, "AggregationType")
+#View(dataDemographics)
+#unique(dataDemographics$statelessStatus)
