@@ -1,0 +1,24 @@
+Type: Package
+Package: StatisticalQualityAssurance
+Title: UNHCR Population statistics Database Validation
+Version: 0.73
+Author: Edgar Scrase, Edouard Legoupil,  Hisham Galal
+Maintainer: Edgar Scrase <scrase@unhcr.org>
+Description: A series of quality assurance and validation checks to assess UNHCR's statistics
+License: Apache License
+URL: https://unhcr-americas.github.io/StatisticalQualityAssurance/docs/
+BugReports: https://github.com/PopulationStatistics/StatisticalQualityAssurance/issues
+Imports: 
+    ggplot2
+Suggests: 
+    broom,
+    classInt,
+    dplyr,
+    knitr
+Remotes:
+    github::UNHCR-WEB/unhcRstyle
+VignetteBuilder: 
+    knitr
+Encoding: UTF-8
+LazyData: TRUE
+RoxygenNote: 7.1.2

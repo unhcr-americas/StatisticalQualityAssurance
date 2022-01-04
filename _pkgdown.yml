@@ -1,0 +1,55 @@
+title: StatisticalQualityAssurance
+url: https://unhcr-americas.github.io/StatisticalQualityAssurance/docs/
+template:
+  params:
+    bootswatch: yeti
+
+navbar:
+  title: StatisticalQualityAssurance
+  left:
+  - text: News
+    href: news/index.html
+  - text: Reference
+    href: reference/index.html
+
+reference:
+  - title: Aggregation type
+    contents:
+      - CheckDemographicAggregationType
+  - title: Consistency between datasets
+    contents:
+      - CheckRefugeeReturns
+      - CheckDemographicTotals
+      - CheckIDPDataIDMC
+  - title: Consistency over time
+    contents:
+      - CheckRSDOverTime
+      - CheckSignificantChange
+  - title: Data submissions
+    contents:
+      - CheckDataReceived
+  - title: Demographic
+    contents:
+      - CheckDemographicCoverageAgeSex
+      - CheckDemographicCoverageSex
+  - title: Missing data
+    contents:
+      - CheckDemographicAgeUnknown
+      - CheckDemographicAccommodationType
+      - CheckDemographicUrbanRural
+      - CheckGeneralMissingBasis
+  - title: Quality
+    contents:
+      - CheckRefugeeBasis
+      - CheckUNHCRRSDProcedures
+      - CheckRSDAfrica
+      - CheckAverageCaseSize
+      - CheckStatelessOrigin
+      - CheckStatelessDisplacedGAZ
+      - CheckHostCommunity
+      - CheckGeneralDispacedOriginAsylum
+      - CheckVDAInOOC
+      - CheckCountryCodes
+  - title: Sub-national data
+    contents:
+      - CheckSubNationalCoverage
